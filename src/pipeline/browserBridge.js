@@ -33,7 +33,7 @@ function createJob(url) {
 function listPending() {
   cleanup();
   return [...jobs.values()]
-    .filter(j => j.status === 'pending' || j.status === 'claimed')
+    .filter(j => j.status === 'pending')
     .sort((a, b) => a.createdAt - b.createdAt)
     .slice(0, 5)
     .map(j => ({ id: j.id, url: j.url, status: j.status, createdAt: new Date(j.createdAt).toISOString() }));
@@ -41,11 +41,9 @@ function listPending() {
 
 function claimJob(id) {
   const job = jobs.get(String(id || ''));
-  if (!job) return null;
-  if (job.status === 'pending') {
-    job.status = 'claimed';
-    job.claimedAt = Date.now();
-  }
+  if (!job || job.status !== 'pending') return null;
+  job.status = 'claimed';
+  job.claimedAt = Date.now();
   return { id: job.id, url: job.url, status: job.status };
 }
 
