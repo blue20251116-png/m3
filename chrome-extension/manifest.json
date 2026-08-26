@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "M3 Product Browser Bridge",
+  "version": "1.0.0",
+  "description": "M3가 서버에서 열지 못한 쇼핑 링크를 Chrome에서 열어 상품 정보를 전달합니다.",
+  "permissions": ["tabs", "scripting", "storage", "alarms"],
+  "host_permissions": ["https://*/*", "http://*/*"],
+  "background": { "service_worker": "service-worker.js" },
+  "action": { "default_popup": "popup.html", "default_title": "M3 Browser Bridge" }
+}
