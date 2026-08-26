@@ -6,6 +6,9 @@
 <title>네이버 블로그 콘텐츠 생성기 (MVP)</title>
 <style>
   body { font-family: -apple-system, "Malgun Gothic", sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; line-height: 1.6; }
+  .top-nav { display:flex; gap:8px; margin-bottom:24px; padding-bottom:14px; border-bottom:1px solid #e5e7eb; }
+  .top-nav a { display:inline-flex; align-items:center; justify-content:center; padding:9px 14px; border:1px solid #d7dbe0; border-radius:10px; text-decoration:none; color:#333; background:#fff; font-size:14px; font-weight:700; }
+  .top-nav a.active { background:#111; color:#fff; border-color:#111; }
   textarea, input { width: 100%; box-sizing: border-box; padding: 10px; margin: 6px 0 16px; font-size: 15px; }
   textarea { min-height: 60px; }
   button { padding: 10px 18px; font-size: 15px; cursor: pointer; }
@@ -24,6 +27,11 @@
 </style>
 </head>
 <body>
+  <nav class="top-nav" aria-label="M3 메뉴">
+    <a class="active" href="/">콘텐츠 생성</a>
+    <a href="/admin">관리자</a>
+  </nav>
+
   <h2>네이버 블로그 콘텐츠 생성기 (1차 MVP)</h2>
 
   <label>쇼핑커넥트 링크</label>
