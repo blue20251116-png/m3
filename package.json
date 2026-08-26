@@ -1,17 +1,16 @@
 {
-  "name": "naver-blog-gen",
-  "version": "0.1.0",
+  "name": "m3-japanese-shorts",
+  "version": "1.0.0",
   "private": true,
-  "type": "commonjs",
+  "type": "module",
   "scripts": {
     "start": "node src/server.js",
-    "test:extract": "node src/pipeline/test-extract.js"
+    "check": "node --check src/server.js && node --check src/stockVideoProvider.js && node --check src/japaneseCopyGenerator.js"
+  },
+  "engines": {
+    "node": ">=22"
   },
   "dependencies": {
-    "express": "^4.19.2",
-    "axios": "^1.7.2",
-    "cheerio": "^1.0.0",
-    "dotenv": "^16.4.5",
-    "sharp": "^0.33.5"
+    "express": "^5.1.0"
   }
 }
