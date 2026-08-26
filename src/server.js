@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { searchStockVideos } from './stockVideoProvider.js';
 import { generateJapaneseCopy, suggestSearchTerms } from './japaneseCopyGenerator.js';
 import { renderShort } from './shortsRenderer.js';
+import { getSettingsStatus, saveSettings } from './configStore.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -12,8 +13,35 @@ const PORT = Number(process.env.PORT || 8080);
 app.use(express.json({ limit: '2mb' }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, service: 'm3-japanese-shorts', pexels: Boolean(process.env.PEXELS_API_KEY), pixabay: Boolean(process.env.PIXABAY_API_KEY) });
+app.get('/api/health', async (_req, res) => {
+  const settings = await getSettingsStatus();
+  res.json({
+    ok: true,
+    service: 'm3-japanese-shorts',
+    pexels: settings.PEXELS_API_KEY.configured,
+    pixabay: settings.PIXABAY_API_KEY.configured
+  });
+});
+
+app.get('/api/admin/settings', async (_req, res) => {
+  try {
+    res.json(await getSettingsStatus());
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/admin/settings', async (req, res) => {
+  try {
+    const allowed = {};
+    for (const key of ['PEXELS_API_KEY', 'PIXABAY_API_KEY']) {
+      if (Object.prototype.hasOwnProperty.call(req.body || {}, key)) allowed[key] = req.body[key];
+    }
+    res.json({ ok: true, settings: await saveSettings(allowed) });
+  } catch (error) {
+    console.error('[SETTINGS]', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 app.get('/api/search', async (req, res) => {
@@ -37,15 +65,9 @@ app.post('/api/copy', (req, res) => {
 
 app.post('/api/render', async (req, res) => {
   try {
-    const { clips, title, captions, duration = 20, style = {} } = req.body || {};
+    const { clips, title, captions, style = {} } = req.body || {};
     if (!title) return res.status(400).json({ error: 'title is required' });
-    const result = await renderShort({
-      clips,
-      title,
-      captions,
-      style,
-      duration: Math.max(15, Math.min(25, Number(duration) || 20))
-    });
+    const result = await renderShort({ clips, title, captions, style });
     res.json(result);
   } catch (error) {
     console.error('[RENDER]', error);
@@ -53,6 +75,7 @@ app.post('/api/render', async (req, res) => {
   }
 });
 
+app.get('/admin', (_req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'admin.html')));
 app.use((_req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'index.html')));
 
 app.listen(PORT, '0.0.0.0', () => {
