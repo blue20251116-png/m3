@@ -1,8 +1,10 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-const ROOT = process.env.WORK_DIR || '/tmp/m3-shorts';
-const FILE = process.env.M3_SETTINGS_FILE || path.join(ROOT, 'settings.json');
+// Railway volume is mounted at /app/db. Keep API settings on the persistent
+// volume by default instead of WORK_DIR (/tmp/m3-shorts), which is ephemeral.
+const SETTINGS_ROOT = process.env.M3_SETTINGS_DIR || '/app/db';
+const FILE = process.env.M3_SETTINGS_FILE || path.join(SETTINGS_ROOT, 'settings.json');
 let cache = null;
 
 async function load() {
