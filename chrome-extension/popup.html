@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+body{font-family:-apple-system,"Malgun Gothic",sans-serif;width:320px;padding:14px}label{display:block;font-size:12px;margin-top:10px}input{width:100%;box-sizing:border-box;padding:8px;margin-top:4px}button{margin-top:12px;padding:9px 12px;width:100%;cursor:pointer}#status{margin-top:10px;font-size:12px;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<strong>M3 Product Browser Bridge</strong>
+<label>M3 서버 주소</label>
+<input id="baseUrl" placeholder="https://m3-production....up.railway.app">
+<label>관리자 비밀번호</label>
+<input id="adminPassword" type="password" placeholder="ADMIN_PASSWORD (없으면 비워두기)">
+<button id="save">저장</button>
+<button id="run">지금 브리지 실행</button>
+<div id="status"></div>
+<script src="popup.js"></script>
+</body>
+</html>
