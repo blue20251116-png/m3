@@ -7,22 +7,8 @@ const ROOT = process.env.WORK_DIR || '/tmp/m3-shorts';
 const OUTPUT_DIR = process.env.OUTPUT_DIR || path.join(process.cwd(), 'public', 'renders');
 
 const DEFAULT_STYLE = {
-  title: {
-    fontSize: 62,
-    color: '#FFFFFF',
-    backgroundColor: '#000000',
-    backgroundHeight: 288,
-    y: 95,
-    align: 'center'
-  },
-  caption: {
-    fontSize: 54,
-    color: '#FFFFFF',
-    strokeColor: '#000000',
-    strokeWidth: 3,
-    bottom: 270,
-    align: 'center'
-  }
+  title: { fontSize: 62, color: '#FFFFFF', backgroundColor: '#000000', backgroundHeight: 288, y: 95, align: 'center' },
+  caption: { fontSize: 54, color: '#FFFFFF', strokeColor: '#000000', strokeWidth: 3, bottom: 270, align: 'center' }
 };
 
 function run(cmd, args) {
@@ -38,8 +24,7 @@ function run(cmd, args) {
 async function download(url, destination) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Download failed ${res.status}`);
-  const bytes = Buffer.from(await res.arrayBuffer());
-  await writeFile(destination, bytes);
+  await writeFile(destination, Buffer.from(await res.arrayBuffer()));
 }
 
 function esc(text = '') {
@@ -85,17 +70,24 @@ function normalizeStyle(style = {}) {
   };
 }
 
-export async function renderShort({ clips, title, captions = [], duration = 20, style = {} }) {
+function clipDuration(clip) {
+  const n = Number(clip?.duration);
+  return Number.isFinite(n) && n > 0 ? n : 5;
+}
+
+export async function renderShort({ clips, title, captions = [], style = {} }) {
   if (!Array.isArray(clips) || clips.length < 1) throw new Error('At least one clip is required');
   const s = normalizeStyle(style);
   await mkdir(ROOT, { recursive: true });
   await mkdir(OUTPUT_DIR, { recursive: true });
+
   const id = crypto.randomUUID();
   const jobDir = path.join(ROOT, id);
   await mkdir(jobDir, { recursive: true });
 
   const selected = clips.slice(0, 6);
-  const segment = Math.max(2.5, duration / selected.length);
+  const durations = selected.map(clipDuration);
+  const totalDuration = durations.reduce((sum, value) => sum + value, 0);
   const normalized = [];
   const videoHeight = Math.max(1200, 1920 - s.title.backgroundHeight);
 
@@ -103,7 +95,7 @@ export async function renderShort({ clips, title, captions = [], duration = 20, 
     const input = path.join(jobDir, `input-${i}.mp4`);
     const out = path.join(jobDir, `clip-${i}.mp4`);
     await download(selected[i].downloadUrl, input);
-    await run('ffmpeg', ['-y', '-i', input, '-t', String(segment), '-an', '-vf',
+    await run('ffmpeg', ['-y', '-i', input, '-t', String(durations[i]), '-an', '-vf',
       `scale=1080:${videoHeight}:force_original_aspect_ratio=increase,crop=1080:${videoHeight},fps=30,format=yuv420p`,
       '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22', out]);
     normalized.push(out);
@@ -117,8 +109,9 @@ export async function renderShort({ clips, title, captions = [], duration = 20, 
   const output = path.join(OUTPUT_DIR, `${id}.mp4`);
   const font = process.env.JP_FONT_FILE || '/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc';
   const captionFilters = captions.slice(0, 5).map((line, idx) => {
-    const start = 1.5 + idx * Math.max(2.5, (duration - 2) / Math.max(captions.length, 1));
-    const end = Math.min(duration, start + 3.2);
+    const block = totalDuration / Math.max(captions.length, 1);
+    const start = idx * block + Math.min(0.6, block * 0.15);
+    const end = Math.min(totalDuration, (idx + 1) * block - Math.min(0.3, block * 0.08));
     return `drawtext=fontfile='${font}':text='${esc(line)}':fontcolor=${s.caption.color}:fontsize=${s.caption.fontSize}:borderw=${s.caption.strokeWidth}:bordercolor=${s.caption.strokeColor}:x=${alignX(s.caption.align)}:y=h-${s.caption.bottom}:enable='between(t,${start.toFixed(2)},${end.toFixed(2)})'`;
   });
 
@@ -128,8 +121,15 @@ export async function renderShort({ clips, title, captions = [], duration = 20, 
     ...captionFilters
   ].join(',');
 
-  await run('ffmpeg', ['-y', '-i', joined, '-t', String(duration), '-vf', filters, '-an',
+  await run('ffmpeg', ['-y', '-i', joined, '-vf', filters, '-an',
     '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', output]);
 
-  return { id, filename: `${id}.mp4`, url: `/renders/${id}.mp4`, duration, style: s };
+  return {
+    id,
+    filename: `${id}.mp4`,
+    url: `/renders/${id}.mp4`,
+    duration: Number(totalDuration.toFixed(2)),
+    clipDurations: durations,
+    style: s
+  };
 }
