@@ -37,9 +37,15 @@ app.post('/api/copy', (req, res) => {
 
 app.post('/api/render', async (req, res) => {
   try {
-    const { clips, title, captions, duration = 20 } = req.body || {};
+    const { clips, title, captions, duration = 20, style = {} } = req.body || {};
     if (!title) return res.status(400).json({ error: 'title is required' });
-    const result = await renderShort({ clips, title, captions, duration: Math.max(15, Math.min(25, Number(duration) || 20)) });
+    const result = await renderShort({
+      clips,
+      title,
+      captions,
+      style,
+      duration: Math.max(15, Math.min(25, Number(duration) || 20))
+    });
     res.json(result);
   } catch (error) {
     console.error('[RENDER]', error);
