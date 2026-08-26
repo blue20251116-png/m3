@@ -6,9 +6,10 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { runPipeline, PipelineError } = require('./pipeline/index');
 const { generateTitlesAndBody, QualityHoldError } = require('./pipeline/contentGenerator');
+const { listPending, claimJob, submitResult } = require('./pipeline/browserBridge');
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '5mb' }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 const runtimeSecretsPath = process.env.RUNTIME_SECRETS_FILE || '/tmp/m3-runtime-secrets.json';
@@ -58,8 +59,9 @@ app.get('/api/admin/status', requireAdmin, (req, res) => {
       openai: configured('OPENAI_API_KEY'),
       naverSearchClientId: configured('NAVER_SEARCH_CLIENT_ID'),
       naverSearchClientSecret: configured('NAVER_SEARCH_CLIENT_SECRET'),
+      browserBridge: true,
     },
-    ready: configured('OPENAI_API_KEY') && configured('NAVER_SEARCH_CLIENT_ID') && configured('NAVER_SEARCH_CLIENT_SECRET'),
+    ready: configured('OPENAI_API_KEY'),
   });
 });
 
@@ -88,6 +90,22 @@ app.post('/api/admin/secrets', requireAdmin, (req, res) => {
   res.json({ ok: true, changed, message: 'API 설정이 현재 서버에 적용되었습니다.' });
 });
 
+app.get('/api/browser-bridge/jobs', requireAdmin, (req, res) => {
+  res.json({ ok: true, jobs: listPending() });
+});
+
+app.post('/api/browser-bridge/jobs/:id/claim', requireAdmin, (req, res) => {
+  const job = claimJob(req.params.id);
+  if (!job) return res.status(404).json({ ok: false, error: 'Browser Bridge 작업을 찾을 수 없습니다.' });
+  res.json({ ok: true, job });
+});
+
+app.post('/api/browser-bridge/jobs/:id/result', requireAdmin, (req, res) => {
+  const result = submitResult(req.params.id, req.body || {});
+  if (!result.ok) return res.status(404).json({ ok: false, error: result.reason });
+  res.json({ ok: true });
+});
+
 app.post('/api/generate', async (req, res) => {
   const { shoppingConnectUrl, disclosureText, knownProductNameHint } = req.body || {};
   if (!shoppingConnectUrl) return res.status(400).json({ error: 'shoppingConnectUrl이 필요합니다.' });
@@ -98,7 +116,7 @@ app.post('/api/generate', async (req, res) => {
     res.json({ ok: true, result });
   } catch (e) {
     if (e instanceof PipelineError) {
-      return res.status(422).json({ ok: false, stage: e.stage, code: e.code, message: e.message, details: e.details || null });
+      return res.status(422).json({ ok: false, stage: e.stage, code: e.code, message: e.message, details: e.details || null, extracted: e.extracted || null, requiresManualInput: Boolean(e.requiresManualInput) });
     }
     console.error(e);
     res.status(500).json({ ok: false, error: e.message || 'internal error' });
@@ -119,4 +137,4 @@ app.post('/api/generate-content', async (req, res) => {
 });
 
 const port = Number(process.env.PORT || 8080);
-app.listen(port, '0.0.0.0', () => console.log(`naver-blog-gen listening on :${port}`));
+app.listen(port, '0.0.0.0', () => console.log(`naver-blog-gen listening on :${port} · browser-bridge ready`));
