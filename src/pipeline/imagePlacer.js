@@ -1,5 +1,6 @@
 const axios = require('axios');
 const crypto = require('crypto');
+const { createBrightBackgroundCutout } = require('./backgroundRemover');
 
 const MIN_IMAGE_BYTES = 8 * 1024;
 const EXCLUDE_URL_PATTERN = /(?:icon|logo|sprite|badge|btn[-_]|button|banner|ad[-_]|advert|thumb[-_]?s\b|favicon|placeholder)/i;
@@ -25,6 +26,8 @@ async function selectAndPlaceImages(images, body, structure) {
   let excludedTooSmall = 0;
   let excludedDuplicateContent = 0;
   let excludedFetchFailed = 0;
+  let cutoutSuccess = 0;
+  let cutoutSkipped = 0;
 
   for (const url of images) {
     if (!url || seenUrl.has(url)) continue;
@@ -37,8 +40,13 @@ async function selectAndPlaceImages(images, body, structure) {
 
     let bytes;
     try {
-      const res = await axios.get(url, { responseType: 'arraybuffer', timeout: 8000, maxContentLength: 20 * 1024 * 1024 });
-      bytes = res.data;
+      const res = await axios.get(url, {
+        responseType: 'arraybuffer',
+        timeout: 8000,
+        maxContentLength: 20 * 1024 * 1024,
+        headers: { 'User-Agent': 'Mozilla/5.0 M3BlogImage/1.0' },
+      });
+      bytes = Buffer.from(res.data);
     } catch (e) {
       excludedFetchFailed += 1;
       continue;
@@ -57,7 +65,29 @@ async function selectAndPlaceImages(images, body, structure) {
     }
     seenHash.add(hash);
 
-    usable.push({ url, sizeBytes, sourceUrl: url, contentHash: hash });
+    let displayUrl = url;
+    let cutout = false;
+    try {
+      const cutoutUrl = await createBrightBackgroundCutout(bytes);
+      if (cutoutUrl) {
+        displayUrl = cutoutUrl;
+        cutout = true;
+        cutoutSuccess += 1;
+      } else {
+        cutoutSkipped += 1;
+      }
+    } catch (e) {
+      cutoutSkipped += 1;
+      console.warn(`[M3][IMAGE CUTOUT] skipped url=${String(url).slice(0,120)} reason=${e.message}`);
+    }
+
+    usable.push({
+      url: displayUrl,
+      sizeBytes,
+      sourceUrl: url,
+      contentHash: hash,
+      cutout,
+    });
   }
 
   const thumbnail = usable[0] || null;
@@ -72,6 +102,8 @@ async function selectAndPlaceImages(images, body, structure) {
     imgIdx += 1;
   }
 
+  console.log(`[M3][IMAGE CUTOUT] usable=${usable.length} cutout=${cutoutSuccess} original=${cutoutSkipped}`);
+
   return {
     thumbnail,
     bodyImages,
@@ -82,6 +114,10 @@ async function selectAndPlaceImages(images, body, structure) {
       tooSmall: excludedTooSmall,
       duplicateContent: excludedDuplicateContent,
       fetchFailed: excludedFetchFailed,
+    },
+    cutout: {
+      success: cutoutSuccess,
+      skipped: cutoutSkipped,
     },
   };
 }
