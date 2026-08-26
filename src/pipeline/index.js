@@ -1,6 +1,7 @@
 const { resolveFinalUrl, LinkResolveError } = require('./linkResolver');
 const { extractProductInfo } = require('./productExtractor');
 const { extractWithSearchFallback } = require('./searchFallback');
+const { requestBrowserExtraction } = require('./browserBridge');
 const { validateProduct, MIN_CONFIDENCE_TO_ACCEPT } = require('./productValidator');
 const { generateKeywords } = require('./keywordGenerator');
 const { generateTitlesAndBody, QualityHoldError } = require('./contentGenerator');
@@ -24,9 +25,9 @@ async function runPipeline({ shoppingConnectUrl, disclosureText, imageLinkLabel,
   try {
     resolved = await resolveFinalUrl(affiliateUrl);
   } catch (e) {
-    console.log(`[NAVER BLOG][PRODUCT EXTRACT FAILED] stage=resolveLink reason=${e.message} → 검색 폴백 시도`);
+    console.log(`[NAVER BLOG][PRODUCT EXTRACT FAILED] stage=resolveLink reason=${e.message} → Browser Bridge 시도`);
   }
-  const destinationUrl = resolved ? resolved.finalUrl : null;
+  let destinationUrl = resolved ? resolved.finalUrl : null;
   let extracted = null;
   let missing = [];
   let usedFallback = false;
@@ -41,6 +42,22 @@ async function runPipeline({ shoppingConnectUrl, disclosureText, imageLinkLabel,
   }
 
   if (!resolved || missing.length) {
+    console.log(`[NAVER BLOG][BROWSER BRIDGE] 직접 추출 불완전 → 원 링크 브라우저 추출 요청`);
+    const bridged = await requestBrowserExtraction(affiliateUrl, { timeoutMs: Number(process.env.M3_BROWSER_BRIDGE_TIMEOUT_MS || 45000) });
+    if (bridged && bridged.productName && Array.isArray(bridged.images) && bridged.images.length) {
+      extracted = bridged;
+      extracted.affiliateUrl = affiliateUrl;
+      destinationUrl = bridged.destinationUrl || bridged.productUrl || destinationUrl;
+      extracted.destinationUrl = destinationUrl;
+      missing = [];
+      usedFallback = true;
+      console.log(`[NAVER BLOG][BROWSER BRIDGE] 성공 product="${extracted.productName}" images=${extracted.images.length}`);
+    } else {
+      console.log('[NAVER BLOG][BROWSER BRIDGE] 응답 없음/불완전 → 네이버 검색 폴백');
+    }
+  }
+
+  if ((!extracted || missing.length) && extracted?.dataSource !== 'browser-bridge') {
     fallbackSeed = (extracted && extracted.productName) || knownProductNameHint || null;
     console.log(`[NAVER BLOG][SEARCH FALLBACK] seed="${fallbackSeed || '(없음)'}" 진입`);
     const fallback = await extractWithSearchFallback({ knownProductName: fallbackSeed });
@@ -48,6 +65,7 @@ async function runPipeline({ shoppingConnectUrl, disclosureText, imageLinkLabel,
       extracted = fallback.extracted;
       extracted.affiliateUrl = affiliateUrl;
       extracted.destinationUrl = extracted.productUrl || null;
+      destinationUrl = extracted.destinationUrl;
       extracted.dataSource = 'search-fallback';
       missing = [];
       usedFallback = true;
@@ -55,20 +73,21 @@ async function runPipeline({ shoppingConnectUrl, disclosureText, imageLinkLabel,
     } else {
       console.log(`[NAVER BLOG][PRODUCT EXTRACT FAILED] stage=searchFallback reason=${fallback.failReason} candidatesTried=${fallback.candidatesTried}`);
       throw new PipelineError('extractProduct', 'MISSING_FIELDS_AFTER_FALLBACK',
-        `직접 추출과 검색 폴백 모두 실패: ${fallback.failReason}`,
+        `직접 추출, Browser Bridge, 검색 폴백 모두 실패: ${fallback.failReason}`,
         { extracted: extracted || { productName: fallbackSeed }, missing: missing.length ? missing : ['productName', 'images'], requiresManualInput: true }
       );
     }
-  } else {
+  } else if (extracted?.dataSource !== 'browser-bridge') {
     extracted.dataSource = 'direct';
   }
 
+  if (!fallbackSeed) fallbackSeed = knownProductNameHint || null;
   const validation = validateProduct({ extracted, knownProductName: fallbackSeed });
   console.log(`[NAVER BLOG][VALIDATE] source=${validation.source} confidence=${validation.confidence} valid=${validation.valid}`);
   if (!validation.valid) {
     console.log(`[NAVER BLOG][PRODUCT VALIDATION FAILED] confidence=${validation.confidence} (기준=${MIN_CONFIDENCE_TO_ACCEPT}) warnings=${validation.warnings.join('; ')}`);
     throw new PipelineError('validateProduct', 'LOW_CONFIDENCE_MATCH',
-      `검색 폴백 결과의 상품 일치 신뢰도가 낮습니다 (${validation.confidence} < ${MIN_CONFIDENCE_TO_ACCEPT})`,
+      `상품 일치 신뢰도가 낮습니다 (${validation.confidence} < ${MIN_CONFIDENCE_TO_ACCEPT})`,
       { extracted, validation, missing: [], requiresManualInput: true }
     );
   }
