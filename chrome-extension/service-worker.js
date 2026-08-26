@@ -65,10 +65,7 @@ async function extractFromTab(tabId) {
 
       let jsonLd = [];
       for (const node of document.querySelectorAll('script[type="application/ld+json"]')) {
-        try {
-          const parsed = JSON.parse(node.textContent || '{}');
-          jsonLd.push(parsed);
-        } catch {}
+        try { jsonLd.push(JSON.parse(node.textContent || '{}')); } catch {}
       }
       const flat = [];
       const walk = v => {
@@ -115,6 +112,96 @@ async function extractFromTab(tabId) {
   return result || {};
 }
 
+function getAllowedHost(url) {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    if (!host || host === 'naver.me') return '';
+    return host;
+  } catch {
+    return '';
+  }
+}
+
+async function searchNaverSameSourceImages(productName, allowedHost) {
+  if (!productName || !allowedHost) return [];
+  let tab = null;
+  try {
+    const query = `${productName} ${allowedHost}`;
+    const searchUrl = `https://search.naver.com/search.naver?where=image&sm=tab_jum&query=${encodeURIComponent(query)}`;
+    tab = await chrome.tabs.create({ url: searchUrl, active: false });
+    await waitTab(tab.id, 20000);
+    await sleep(1200);
+
+    const [{ result }] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      args: [allowedHost],
+      func: (allowedHostArg) => {
+        const allowedHost = String(allowedHostArg || '').toLowerCase();
+        const out = [];
+        const seen = new Set();
+
+        const normalizeCandidateUrl = raw => {
+          try { return new URL(raw, location.href).href; } catch { return ''; }
+        };
+
+        const decodedTargets = href => {
+          const values = [];
+          const add = v => {
+            if (!v) return;
+            let x = String(v);
+            for (let i = 0; i < 2; i++) {
+              try { x = decodeURIComponent(x); } catch { break; }
+            }
+            values.push(x);
+          };
+          add(href);
+          try {
+            const u = new URL(href, location.href);
+            for (const key of ['url', 'u', 'target', 'source', 'redirect', 'link']) add(u.searchParams.get(key));
+          } catch {}
+          return values;
+        };
+
+        const sourceMatches = anchor => {
+          if (!anchor?.href) return false;
+          for (const candidate of decodedTargets(anchor.href)) {
+            try {
+              const h = new URL(candidate, location.href).hostname.toLowerCase();
+              if (h === allowedHost) return true;
+            } catch {}
+          }
+          return false;
+        };
+
+        for (const img of [...document.images].slice(0, 240)) {
+          const w = Number(img.naturalWidth || img.width || 0);
+          const h = Number(img.naturalHeight || img.height || 0);
+          if (w < 180 || h < 150) continue;
+          const anchor = img.closest('a[href]');
+          if (!sourceMatches(anchor)) continue;
+          const src = normalizeCandidateUrl(img.currentSrc || img.src);
+          if (!/^https?:\/\//i.test(src)) continue;
+          if (/logo|icon|sprite|avatar|badge/i.test(src)) continue;
+          if (seen.has(src)) continue;
+          seen.add(src);
+          out.push(src);
+          if (out.length >= 8) break;
+        }
+        return out;
+      },
+    });
+
+    const images = Array.isArray(result) ? result : [];
+    console.log(`[M3 Bridge] naver-image-search product=${productName.slice(0,80)} host=${allowedHost} found=${images.length}`);
+    return images;
+  } catch (e) {
+    console.warn(`[M3 Bridge] naver-image-search failed: ${e.message}`);
+    return [];
+  } finally {
+    if (tab?.id) await chrome.tabs.remove(tab.id).catch(() => {});
+  }
+}
+
 async function processJob(job) {
   let tab = null;
   try {
@@ -122,11 +209,16 @@ async function processJob(job) {
     tab = await chrome.tabs.create({ url: job.url, active: false });
     await waitTab(tab.id);
     const data = await extractFromTab(tab.id);
+
+    const allowedHost = getAllowedHost(data.finalUrl);
+    const searchedImages = await searchNaverSameSourceImages(data.productName, allowedHost);
+    data.images = [...new Set([...(searchedImages || []), ...(data.images || [])])].slice(0, 20);
+
     await api(`/api/browser-bridge/jobs/${encodeURIComponent(job.id)}/result`, {
       method: 'POST',
       body: JSON.stringify(data),
     });
-    console.log(`[M3 Bridge] done job=${job.id} product=${data.productName || '-'} images=${data.images?.length || 0}`);
+    console.log(`[M3 Bridge] done job=${job.id} product=${data.productName || '-'} images=${data.images?.length || 0} searched=${searchedImages.length}`);
     return true;
   } catch (e) {
     console.warn(`[M3 Bridge] failed job=${job.id}`, e);
