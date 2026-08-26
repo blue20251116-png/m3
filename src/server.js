@@ -1,25 +1,3 @@
-import express from 'express';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { searchStockVideos } from './stockVideoProvider.js';
-import { generateTargetCopy, suggestSearchTerms } from './japaneseCopyGenerator.js';
-import { listTargetProfiles } from './targetProfiles.js';
-import { renderShort } from './shortsRenderer.js';
-import { getSettingsStatus, saveSettings } from './configStore.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const app = express();
-const PORT = Number(process.env.PORT || 8080);
-app.use(express.json({ limit:'2mb' }));
-app.use(express.static(path.join(__dirname,'..','public')));
-
-app.get('/api/health', async (_req,res)=>{ const settings=await getSettingsStatus(); res.json({ok:true,service:'m3-global-shorts',pexels:settings.PEXELS_API_KEY.configured,pixabay:settings.PIXABAY_API_KEY.configured}); });
-app.get('/api/targets', (_req,res)=>res.json({targets:listTargetProfiles()}));
-app.get('/api/admin/settings', async (_req,res)=>{ try{res.json(await getSettingsStatus());}catch(error){res.status(500).json({error:error.message});} });
-app.post('/api/admin/settings', async (req,res)=>{ try{const allowed={}; for(const key of ['PEXELS_API_KEY','PIXABAY_API_KEY']) if(Object.prototype.hasOwnProperty.call(req.body||{},key)) allowed[key]=req.body[key]; res.json({ok:true,settings:await saveSettings(allowed)});}catch(error){console.error('[SETTINGS]',error);res.status(500).json({error:error.message});} });
-app.get('/api/search', async (req,res)=>{ try{const subject=String(req.query.q||'').trim(); if(!subject)return res.status(400).json({error:'q is required'}); const terms=suggestSearchTerms(subject); const selectedTerm=String(req.query.term||terms[0]); const videos=await searchStockVideos(selectedTerm,8); res.json({subject,terms,selectedTerm,videos});}catch(error){console.error('[SEARCH]',error);res.status(500).json({error:error.message});} });
-app.post('/api/copy',(req,res)=>{const {subject,mood='dreamy',duration=20,target='ja'}=req.body||{}; res.json(generateTargetCopy({subject,mood,duration:Number(duration)||20,target}));});
-app.post('/api/render',async(req,res)=>{try{const {clips,title,captions,style={},target='ja'}=req.body||{};if(!title)return res.status(400).json({error:'title is required'});const result=await renderShort({clips,title,captions,style:{...style,target}});res.json(result);}catch(error){console.error('[RENDER]',error);res.status(500).json({error:error.message});}});
-app.get('/admin',(_req,res)=>res.sendFile(path.join(__dirname,'..','public','admin.html')));
-app.use((_req,res)=>res.sendFile(path.join(__dirname,'..','public','index.html')));
-app.listen(PORT,'0.0.0.0',()=>console.log(`m3 Global Shorts listening on :${PORT}`));
+import express from 'express';import path from 'node:path';import{fileURLToPath}from'node:url';import{searchStockVideos}from'./stockVideoProvider.js';import{generateTargetCopy,suggestSearchTerms}from'./japaneseCopyGenerator.js';import{listTargetProfiles}from'./targetProfiles.js';import{renderShort,renderThumbnail}from'./shortsRenderer.js';import{getSettingsStatus,saveSettings}from'./configStore.js';
+const __dirname=path.dirname(fileURLToPath(import.meta.url)),app=express(),PORT=Number(process.env.PORT||8080);app.use(express.json({limit:'2mb'}));app.use(express.static(path.join(__dirname,'..','public')));
+app.get('/api/health',async(_q,r)=>{const s=await getSettingsStatus();r.json({ok:true,service:'m3-global-shorts',pexels:s.PEXELS_API_KEY.configured,pixabay:s.PIXABAY_API_KEY.configured})});app.get('/api/targets',(_q,r)=>r.json({targets:listTargetProfiles()}));app.get('/api/admin/settings',async(_q,r)=>{try{r.json(await getSettingsStatus())}catch(e){r.status(500).json({error:e.message})}});app.post('/api/admin/settings',async(q,r)=>{try{const a={};for(const k of['PEXELS_API_KEY','PIXABAY_API_KEY'])if(Object.prototype.hasOwnProperty.call(q.body||{},k))a[k]=q.body[k];r.json({ok:true,settings:await saveSettings(a)})}catch(e){r.status(500).json({error:e.message})}});app.get('/api/search',async(q,r)=>{try{const subject=String(q.query.q||'').trim();if(!subject)return r.status(400).json({error:'q is required'});const terms=suggestSearchTerms(subject),selectedTerm=String(q.query.term||terms[0]),videos=await searchStockVideos(selectedTerm,8);r.json({subject,terms,selectedTerm,videos})}catch(e){r.status(500).json({error:e.message})}});app.post('/api/copy',(q,r)=>{const{subject,mood='dreamy',duration=20,target='ja'}=q.body||{};r.json(generateTargetCopy({subject,mood,duration:Number(duration)||20,target}))});app.post('/api/render',async(q,r)=>{try{const{clips,title,captions,style={},target='ja'}=q.body||{};if(!title)return r.status(400).json({error:'title is required'});r.json(await renderShort({clips,title,captions,style:{...style,target}}))}catch(e){console.error('[RENDER]',e);r.status(500).json({error:e.message})}});app.post('/api/thumbnail',async(q,r)=>{try{const{clip,title,style={},timestamp=1}=q.body||{};if(!clip?.downloadUrl)return r.status(400).json({error:'clip is required'});if(!title)return r.status(400).json({error:'title is required'});r.json(await renderThumbnail({clip,title,style,timestamp}))}catch(e){console.error('[THUMBNAIL]',e);r.status(500).json({error:e.message})}});app.get('/admin',(_q,r)=>r.sendFile(path.join(__dirname,'..','public','admin.html')));app.use((_q,r)=>r.sendFile(path.join(__dirname,'..','public','index.html')));app.listen(PORT,'0.0.0.0',()=>console.log(`m3 Global Shorts listening on :${PORT}`));
