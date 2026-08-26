@@ -47,7 +47,7 @@ app.post('/api/render', async (req, res) => {
   }
 });
 
-app.get('*', (_req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'index.html')));
+app.use((_req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'index.html')));
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`m3 Japanese Shorts listening on :${PORT}`);
