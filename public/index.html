@@ -4,7 +4,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>M3 Global Shorts</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#0b0d10;color:#f5f7fa;font-family:system-ui,-apple-system,"Noto Sans KR",sans-serif}.wrap{max-width:1280px;margin:auto;padding:24px}.hero{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:18px}.hero h1{margin:0}.hero p{margin:6px 0;color:#9aa4b2}.panel{background:#13171d;border:1px solid #252b34;border-radius:18px;padding:18px;margin-bottom:16px}.row{display:grid;grid-template-columns:1.2fr 1fr 1fr 120px;gap:10px}input,select,button,textarea{font:inherit;border-radius:11px;border:1px solid #303844;background:#0e1217;color:#fff;padding:9px 10px}textarea{width:100%;resize:vertical;line-height:1.45}button{cursor:pointer;background:#fff;color:#111;font-weight:800}button:disabled{opacity:.5;cursor:default}button.secondary{background:#1b222b;color:#fff}.actions{display:flex;gap:8px;align-items:center}.link,.badge{font-size:12px;padding:8px 10px;border:1px solid #303844;border-radius:999px;color:#fff;text-decoration:none;background:#1c232c}.terms{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.chip{padding:7px 10px;border:1px solid #303844;border-radius:999px;color:#cdd5df;cursor:pointer}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px}.card{border:2px solid transparent;background:#10141a;border-radius:14px;overflow:hidden}.card.selected{border-color:#fff}.card video{width:100%;aspect-ratio:9/14;object-fit:cover;background:#000;display:block}.meta{padding:10px;font-size:12px;color:#aab4c1}.selectBtn{width:calc(100% - 20px);margin:0 10px 10px}
-.editor{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px}
+.editor{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;align-items:start}
 .veCard{background:#0f1318;border:1px solid #2a313b;border-radius:14px;padding:13px;margin-bottom:12px}
 .veCard h2,.veCard h3{margin:0 0 8px}
 .fieldGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
@@ -22,18 +22,18 @@
 .toolRow{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
 .buttonRow{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px}
 .musicBox{display:grid;gap:10px}.musicBox audio{width:100%}.musicName{font-size:13px;color:#dce3eb}.musicGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.control{background:#0f1318;border:1px solid #272e37;border-radius:12px;padding:10px}.control label{display:flex;justify-content:space-between;font-size:12px;color:#b9c2ce;margin-bottom:7px}
-.previewWrap{position:sticky;top:16px}
+.previewWrap{position:sticky;top:16px;align-self:start;height:max-content;max-height:calc(100vh - 32px)}
 .previewOuter{width:270px;height:480px;margin:auto;overflow:hidden;border-radius:18px;border:1px solid #333;background:#000;position:relative}
 .previewCanvas{width:1080px;height:1920px;position:absolute;left:0;top:0;transform-origin:top left;background:#000;overflow:hidden}
 .previewCanvas video{position:absolute;object-fit:cover;background:#111}
 .canvasBar{position:absolute}
 #previewAvatarFallback{position:absolute;border-radius:50%;background:#ddd}
 #previewAvatar{position:absolute;border-radius:50%;object-fit:cover;display:none}
-#previewChannelName,#previewHandle{position:absolute;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#previewChannelName,#previewHandle{position:absolute;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:M3_heavy,"Noto Sans CJK JP",sans-serif}
 #previewTitle{position:absolute;white-space:pre;overflow:visible;font-weight:900}
 #previewCaption{position:absolute;white-space:pre-wrap;word-break:keep-all;font-weight:800}
 .resultBox{margin-top:10px}.resultBox img{max-width:190px;border-radius:10px;margin-top:8px}
-@media(max-width:860px){.row,.editor,.musicGrid{grid-template-columns:1fr}.fieldGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.previewWrap{position:static}.hero{align-items:flex-start;flex-direction:column}}
+@media(max-width:860px){.row,.editor,.musicGrid{grid-template-columns:1fr}.fieldGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.previewWrap{position:static;max-height:none}.hero{align-items:flex-start;flex-direction:column}}
 </style></head>
 <body><div class="wrap">
 <div class="hero"><div><h1>M3 Global Shorts</h1><p>Stock Video × Music Segment × Global Target</p></div><div class="actions"><a class="link" href="/admin">API 설정</a><span class="badge" id="health">checking...</span></div></div>
