@@ -2,11 +2,12 @@ import { getTargetProfile } from './targetProfiles.js';
 
 function normalizeSubject(input = '', target = 'ja') {
   const raw = input.trim();
-  if (!raw) return target === 'ja' ? '景色' : target === 'ar' ? 'هذا المشهد' : 'this view';
+  if (!raw) return target === 'ja' ? '景色' : target === 'ar' ? 'هذا المشهد' : target === 'es' ? 'este lugar' : 'this view';
   const maps = {
     ja: {'new york':'ニューヨークの夜',tokyo:'東京の夜',paris:'パリの街',switzerland:'スイスの絶景',ocean:'海',sunset:'夕焼け',aurora:'オーロラ',snow:'雪景色',rain:'雨の夜','night drive':'夜のドライブ','airplane window':'空から見る景色','train window':'列車から見る景色'},
     en: {'new york':'New York at night',tokyo:'Tokyo at night',paris:'Paris',switzerland:'Switzerland',ocean:'the ocean',sunset:'this sunset',aurora:'the northern lights',snow:'this winter view',rain:'a rainy night','night drive':'a night drive','airplane window':'the view from above','train window':'the view from the train'},
-    ar: {'new york':'نيويورك ليلاً',tokyo:'طوكيو ليلاً',paris:'باريس',switzerland:'سويسرا',ocean:'البحر',sunset:'غروب الشمس',aurora:'الشفق القطبي',snow:'مشهد الشتاء',rain:'ليلة ممطرة','night drive':'قيادة ليلية','airplane window':'المنظر من السماء','train window':'المنظر من القطار'}
+    ar: {'new york':'نيويورك ليلاً',tokyo:'طوكيو ليلاً',paris:'باريس',switzerland:'سويسرا',ocean:'البحر',sunset:'غروب الشمس',aurora:'الشفق القطبي',snow:'مشهد الشتاء',rain:'ليلة ممطرة','night drive':'قيادة ليلية','airplane window':'المنظر من السماء','train window':'المنظر من القطار'},
+    es: {'new york':'Nueva York de noche',tokyo:'Tokio de noche',paris:'París',switzerland:'Suiza',ocean:'el océano',sunset:'este atardecer',aurora:'la aurora boreal',snow:'este paisaje de invierno',rain:'una noche lluviosa','night drive':'un paseo nocturno en coche','airplane window':'la vista desde el cielo','train window':'la vista desde el tren'}
   };
   return maps[target]?.[raw.toLowerCase()] || raw;
 }
@@ -54,8 +55,6 @@ function toEnglishStockSearch(subject='') {
   let translated=` ${raw} `;
   for (const [ko,en] of STOCK_SEARCH_TRANSLATIONS) translated=translated.split(ko).join(` ${en} `);
 
-  // Pexels/Pixabay perform much better with English-only keywords. Remove leftover Korean
-  // particles/descriptive text after extracting mapped visual/location concepts.
   translated=translated
     .replace(/[가-힣]+/g,' ')
     .replace(/[^A-Za-z0-9\s'-]/g,' ')
