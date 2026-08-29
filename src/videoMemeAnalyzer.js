@@ -7,10 +7,10 @@ import { getSetting } from './configStore.js';
 const ROOT = process.env.WORK_DIR || '/tmp/m3-shorts';
 
 function run(cmd,args){return new Promise((resolve,reject)=>{const child=spawn(cmd,args,{stdio:['ignore','ignore','pipe']});let err='';child.stderr.on('data',d=>err+=d.toString());child.on('error',reject);child.on('close',code=>code===0?resolve():reject(new Error(`${cmd} failed (${code}) ${err.slice(-1800)}`)))})}
-function safeUploadPath(publicDir,downloadUrl=''){
-  const u=String(downloadUrl||'');
-  const name=path.basename(u.split('?')[0]);
-  if(!/^video-[a-f0-9-]+\.(mp4|mov|m4v|webm|mkv)$/i.test(name))throw new Error('업로드한 영상만 분석할 수 있습니다');
+function safeUploadPath(publicDir,{uploadId='',downloadUrl=''}={}){
+  const raw=String(uploadId||'').trim()||path.basename(String(downloadUrl||'').split('?')[0]);
+  const name=path.basename(raw);
+  if(!/^video-[a-f0-9-]+\.(mp4|mov|m4v|webm|mkv)$/i.test(name))throw new Error('업로드 영상 식별값이 올바르지 않습니다');
   return path.join(publicDir,'uploads',name);
 }
 async function frameDataUrls(videoPath,duration=12){
@@ -37,9 +37,9 @@ function parseJson(text){
   const m=cleaned.match(/\{[\s\S]*\}/);if(m)return JSON.parse(m[0]);
   throw new Error('AI 분석 결과 JSON 파싱 실패');
 }
-export async function analyzeVideoForMemes({publicDir,downloadUrl,duration}){
+export async function analyzeVideoForMemes({publicDir,uploadId,downloadUrl,duration}){
   const key=await getSetting('OPENAI_API_KEY');if(!key)throw new Error('관리자 API 설정에서 OpenAI API Key를 먼저 입력하세요');
-  const videoPath=safeUploadPath(publicDir,downloadUrl),frames=await frameDataUrls(videoPath,duration);
+  const videoPath=safeUploadPath(publicDir,{uploadId,downloadUrl}),frames=await frameDataUrls(videoPath,duration);
   const prompt=`You are a short-form viral copy editor for Japanese and English-speaking Gen Z audiences. Analyze the four chronological frames from ONE short video. Infer only what is visually supported. Do not invent identities, facts, locations, relationships, or events you cannot see. Create punchy internet-native copy, not literal translation. Japanese may naturally use expressions such as え、待って, エグい, やば, 草, www, 無理, 天才かよ when appropriate. English may naturally use BRO, NAH, WAIT, AIN'T NO WAY, bro is cooking, I'm crying, 💀, 😭 when appropriate. Avoid forcing slang when the clip is beautiful, calm, emotional, or serious.
 
 Return ONLY valid JSON in this exact shape:
