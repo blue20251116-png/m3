@@ -10,137 +10,22 @@ const FFMPEG_THREADS = String(Math.max(1, Math.min(4, Number(process.env.FFMPEG_
 const FONT = process.env.JP_FONT_FILE || '/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc';
 
 const DEFAULT_STYLE = {
-  title: { fontSize: 62, color: '#FFFFFF', highlightColor: '#FFD84D', backgroundColor: '#000000', backgroundHeight: 288, y: 70, align: 'center' },
-  caption: { fontSize: 54, color: '#FFFFFF', strokeColor: '#000000', strokeWidth: 3, bottom: 270, align: 'center' }
+  title: { fontSize: 72, color: '#080808', highlightColor: '#F4008A', backgroundColor: '#FFFFFF', backgroundHeight: 430, y: 210, align: 'left', socialHeader: true, channelName: '此処ではない何処か', handle: '@kokodewanai_dokoka' },
+  caption: { fontSize: 46, color: '#FFE600', strokeColor: '#000000', strokeWidth: 5, bottom: 270, align: 'center' }
 };
-
-function run(cmd, args) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] });
-    let stderr = '';
-    child.stderr.on('data', d => { stderr += d.toString(); });
-    child.on('error', reject);
-    child.on('close', (code, signal) => {
-      if (code === 0) return resolve();
-      reject(new Error(`${cmd} exited ${signal ? `signal ${signal}` : `code ${code}`}: ${stderr.slice(-2400)}`));
-    });
-  });
-}
-
-async function download(url, destination) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Download failed ${res.status}`);
-  await writeFile(destination, Buffer.from(await res.arrayBuffer()));
-}
-
-function escDrawtext(text = '') {
-  return String(text).replaceAll('\\', '\\\\').replaceAll(':', '\\:').replaceAll("'", "\\'").replaceAll('%', '\\%').replaceAll('\n', ' ');
-}
-function clamp(v, min, max, fallback) { const n = Number(v); return Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : fallback; }
-function hex(v, fallback) { const s = String(v || '').trim().toUpperCase(); return /^#[0-9A-F]{6}$/.test(s) ? s : fallback; }
-function ffColor(v, fallback) { return `0x${hex(v, fallback).slice(1)}`; }
-function assColor(v, fallback) {
-  const h = hex(v, fallback).slice(1);
-  return `&H00${h.slice(4, 6)}${h.slice(2, 4)}${h.slice(0, 2)}&`;
-}
-function alignX(a) { return a === 'left' ? '55' : a === 'right' ? 'w-text_w-55' : '(w-text_w)/2'; }
-function normalizeStyle(style = {}) {
-  const t = style.title || {}, c = style.caption || {};
-  return {
-    title: {
-      fontSize: clamp(t.fontSize, 28, 110, DEFAULT_STYLE.title.fontSize),
-      color: hex(t.color, DEFAULT_STYLE.title.color),
-      highlightColor: hex(t.highlightColor, DEFAULT_STYLE.title.highlightColor),
-      backgroundColor: hex(t.backgroundColor, DEFAULT_STYLE.title.backgroundColor),
-      backgroundHeight: clamp(t.backgroundHeight, 160, 520, DEFAULT_STYLE.title.backgroundHeight),
-      y: clamp(t.y, 15, 420, DEFAULT_STYLE.title.y),
-      align: ['left', 'center', 'right'].includes(t.align) ? t.align : 'center'
-    },
-    caption: {
-      fontSize: clamp(c.fontSize, 24, 100, DEFAULT_STYLE.caption.fontSize),
-      color: hex(c.color, DEFAULT_STYLE.caption.color),
-      strokeColor: hex(c.strokeColor, DEFAULT_STYLE.caption.strokeColor),
-      strokeWidth: clamp(c.strokeWidth, 0, 10, DEFAULT_STYLE.caption.strokeWidth),
-      bottom: clamp(c.bottom, 80, 700, DEFAULT_STYLE.caption.bottom),
-      align: ['left', 'center', 'right'].includes(c.align) ? c.align : 'center'
-    }
-  };
-}
-function clipDuration(c) { const n = Number(c?.duration); return Number.isFinite(n) && n > 0 ? n : 5; }
-function assEscape(s = '') { return String(s).replaceAll('\\', '\\\\').replaceAll('{', '\\{').replaceAll('}', '\\}'); }
-function titleToAssText(title, baseColor, highlightColor) {
-  const src = String(title || '').replace(/\r/g, '');
-  let out = '', last = 0;
-  const re = /\{\{([\s\S]*?)\}\}/g;
-  let m;
-  while ((m = re.exec(src))) {
-    out += assEscape(src.slice(last, m.index));
-    out += `{\\c${assColor(highlightColor, '#FFD84D')}}${assEscape(m[1])}{\\c${assColor(baseColor, '#FFFFFF')}}`;
-    last = m.index + m[0].length;
-  }
-  out += assEscape(src.slice(last));
-  return out.replaceAll('\n', '\\N');
-}
-async function createTitleAss(jobDir, title, s) {
-  const file = path.join(jobDir, 'title.ass');
-  const an = s.title.align === 'left' ? 7 : s.title.align === 'right' ? 9 : 8;
-  const x = s.title.align === 'left' ? 55 : s.title.align === 'right' ? 1025 : 540;
-  const y = s.title.y;
-  const text = titleToAssText(title, s.title.color, s.title.highlightColor);
-  const ass = `[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\nWrapStyle: 2\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding\nStyle: Title,Noto Sans CJK JP,${s.title.fontSize},${assColor(s.title.color, '#FFFFFF')},${assColor(s.title.highlightColor, '#FFD84D')},&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,${an},55,55,0,1\n\n[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\nDialogue: 0,0:00:00.00,9:59:59.00,Title,,0,0,0,,{\\an${an}\\pos(${x},${y})}${text}\n`;
-  await writeFile(file, ass, 'utf8');
-  return file;
-}
-function subtitlesFilter(file) {
-  return `subtitles='${file.replaceAll("'", "'\\''")}':fontsdir='/usr/share/fonts/opentype/noto'`;
-}
-
-export async function renderThumbnail({ clip, title, style = {}, timestamp = 1 }) {
-  if (!clip?.downloadUrl) throw new Error('clip is required');
-  const s = normalizeStyle(style);
-  await mkdir(ROOT, { recursive: true }); await mkdir(OUTPUT_DIR, { recursive: true });
-  const id = crypto.randomUUID(), jobDir = path.join(ROOT, `thumb-${id}`); await mkdir(jobDir, { recursive: true });
-  const input = path.join(jobDir, 'input.mp4'); await download(clip.downloadUrl, input);
-  const ass = await createTitleAss(jobDir, title, s);
-  const output = path.join(OUTPUT_DIR, `${id}.jpg`);
-  const videoHeight = Math.max(1200, 1920 - s.title.backgroundHeight);
-  const filters = `scale=1080:${videoHeight}:force_original_aspect_ratio=increase,crop=1080:${videoHeight},pad=1080:1920:0:${s.title.backgroundHeight}:color=${ffColor(s.title.backgroundColor, '#000000')},${subtitlesFilter(ass)}`;
-  await run('ffmpeg', ['-y', '-threads', FFMPEG_THREADS, '-ss', String(Math.max(0, Number(timestamp) || 0)), '-i', input, '-frames:v', '1', '-vf', filters, '-q:v', '2', output]);
-  return { id, filename: `${id}.jpg`, url: `/renders/${id}.jpg`, width: 1080, height: 1920 };
-}
-
-export async function renderShort({ clips, title, captions = [], style = {}, music = null }) {
-  if (!Array.isArray(clips) || clips.length < 1) throw new Error('At least one clip is required');
-  const s = normalizeStyle(style);
-  await mkdir(ROOT, { recursive: true }); await mkdir(OUTPUT_DIR, { recursive: true });
-  const id = crypto.randomUUID(), jobDir = path.join(ROOT, id); await mkdir(jobDir, { recursive: true });
-  const selected = clips.slice(0, 6), durations = selected.map(clipDuration), sourceDuration = durations.reduce((a, b) => a + b, 0);
-  let targetDuration = sourceDuration, musicStart = 0, musicVolume = .9, musicFile = null;
-  if (music?.url) {
-    musicFile = localMusicPath(music.url); musicStart = Math.max(0, Number(music.start) || 0); musicVolume = clamp(music.volume, 0, 2, .9);
-    const requested = Number(music.duration); if (Number.isFinite(requested) && requested > 0) targetDuration = Math.min(sourceDuration, requested);
-  }
-  const normalized = [], videoHeight = Math.max(1200, 1920 - s.title.backgroundHeight);
-  console.log(`[RENDER ${id}] clips=${selected.length} source=${sourceDuration.toFixed(2)} target=${targetDuration.toFixed(2)} music=${musicFile ? 'yes' : 'no'}`);
-  let remaining = targetDuration;
-  for (let i = 0; i < selected.length && remaining > 0; i += 1) {
-    const use = Math.min(durations[i], remaining), input = path.join(jobDir, `input-${i}.mp4`), out = path.join(jobDir, `clip-${i}.mp4`);
-    await download(selected[i].downloadUrl, input);
-    await run('ffmpeg', ['-y', '-threads', FFMPEG_THREADS, '-filter_threads', FFMPEG_THREADS, '-i', input, '-t', String(use), '-an', '-vf', `scale=1080:${videoHeight}:force_original_aspect_ratio=increase,crop=1080:${videoHeight},fps=30,format=yuv420p`, '-c:v', 'libx264', '-threads', FFMPEG_THREADS, '-preset', 'ultrafast', '-crf', '24', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', out]);
-    normalized.push(out); remaining -= use;
-  }
-  const concatFile = path.join(jobDir, 'concat.txt'); await writeFile(concatFile, normalized.map(p => `file '${p.replaceAll("'", "'\\''")}'`).join('\n'));
-  const joined = path.join(jobDir, 'joined.mp4'); await run('ffmpeg', ['-y', '-threads', FFMPEG_THREADS, '-f', 'concat', '-safe', '0', '-i', concatFile, '-c', 'copy', joined]);
-  const ass = await createTitleAss(jobDir, title, s);
-  const videoOnly = path.join(jobDir, 'video.mp4'), output = path.join(OUTPUT_DIR, `${id}.mp4`);
-  const captionFilters = captions.slice(0, 8).map((line, idx) => {
-    const block = targetDuration / Math.max(captions.length, 1), start = idx * block + Math.min(.4, block * .12), end = Math.min(targetDuration, (idx + 1) * block - Math.min(.2, block * .06));
-    return `drawtext=fontfile='${FONT}':text='${escDrawtext(line)}':fontcolor=${ffColor(s.caption.color, '#FFFFFF')}:fontsize=${s.caption.fontSize}:borderw=${s.caption.strokeWidth}:bordercolor=${ffColor(s.caption.strokeColor, '#000000')}:x=${alignX(s.caption.align)}:y=h-${s.caption.bottom}:enable='between(t,${start.toFixed(2)},${end.toFixed(2)})'`;
-  });
-  const filters = [`pad=1080:1920:0:${s.title.backgroundHeight}:color=${ffColor(s.title.backgroundColor, '#000000')}`, subtitlesFilter(ass), ...captionFilters].join(',');
-  await run('ffmpeg', ['-y', '-threads', FFMPEG_THREADS, '-filter_threads', FFMPEG_THREADS, '-i', joined, '-t', String(targetDuration), '-vf', filters, '-an', '-c:v', 'libx264', '-threads', FFMPEG_THREADS, '-preset', 'ultrafast', '-crf', '23', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', videoOnly]);
-  if (musicFile) {
-    await run('ffmpeg', ['-y', '-threads', FFMPEG_THREADS, '-i', videoOnly, '-ss', String(musicStart), '-t', String(targetDuration), '-i', musicFile, '-filter:a', `volume=${musicVolume}`, '-map', '0:v:0', '-map', '1:a:0', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-shortest', '-movflags', '+faststart', output]);
-  } else await run('ffmpeg', ['-y', '-i', videoOnly, '-c', 'copy', output]);
-  return { id, filename: `${id}.mp4`, url: `/renders/${id}.mp4`, duration: Number(targetDuration.toFixed(2)), sourceDuration: Number(sourceDuration.toFixed(2)), clipDurations: durations, music: musicFile ? { start: musicStart, volume: musicVolume } : null, style: s };
-}
+function run(cmd,args){return new Promise((resolve,reject)=>{const child=spawn(cmd,args,{stdio:['ignore','pipe','pipe']});let stderr='';child.stderr.on('data',d=>{stderr+=d.toString()});child.on('error',reject);child.on('close',(code,signal)=>code===0?resolve():reject(new Error(`${cmd} exited ${signal?`signal ${signal}`:`code ${code}`}: ${stderr.slice(-2400)}`)))})}
+async function download(url,destination){const res=await fetch(url);if(!res.ok)throw new Error(`Download failed ${res.status}`);await writeFile(destination,Buffer.from(await res.arrayBuffer()))}
+function escDrawtext(text=''){return String(text).replaceAll('\\','\\\\').replaceAll(':','\\:').replaceAll("'","\\'").replaceAll('%','\\%').replaceAll('\n',' ')}
+function clamp(v,min,max,fallback){const n=Number(v);return Number.isFinite(n)?Math.max(min,Math.min(max,n)):fallback}
+function hex(v,fallback){const s=String(v||'').trim().toUpperCase();return /^#[0-9A-F]{6}$/.test(s)?s:fallback}
+function ffColor(v,fallback){return `0x${hex(v,fallback).slice(1)}`}
+function assColor(v,fallback){const h=hex(v,fallback).slice(1);return `&H00${h.slice(4,6)}${h.slice(2,4)}${h.slice(0,2)}&`}
+function alignX(a){return a==='left'?'55':a==='right'?'w-text_w-55':'(w-text_w)/2'}
+function normalizeStyle(style={}){const t=style.title||{},c=style.caption||{};return{title:{fontSize:clamp(t.fontSize,28,110,DEFAULT_STYLE.title.fontSize),color:hex(t.color,DEFAULT_STYLE.title.color),highlightColor:hex(t.highlightColor,DEFAULT_STYLE.title.highlightColor),backgroundColor:hex(t.backgroundColor,DEFAULT_STYLE.title.backgroundColor),backgroundHeight:clamp(t.backgroundHeight,300,620,DEFAULT_STYLE.title.backgroundHeight),y:clamp(t.y,120,520,DEFAULT_STYLE.title.y),align:['left','center','right'].includes(t.align)?t.align:DEFAULT_STYLE.title.align,socialHeader:t.socialHeader!==false,channelName:String(t.channelName||DEFAULT_STYLE.title.channelName).slice(0,40),handle:String(t.handle||DEFAULT_STYLE.title.handle).slice(0,50)},caption:{fontSize:clamp(c.fontSize,24,100,DEFAULT_STYLE.caption.fontSize),color:hex(c.color,DEFAULT_STYLE.caption.color),strokeColor:hex(c.strokeColor,DEFAULT_STYLE.caption.strokeColor),strokeWidth:clamp(c.strokeWidth,0,10,DEFAULT_STYLE.caption.strokeWidth),bottom:clamp(c.bottom,80,700,DEFAULT_STYLE.caption.bottom),align:['left','center','right'].includes(c.align)?c.align:DEFAULT_STYLE.caption.align}}}
+function clipDuration(c){const n=Number(c?.duration);return Number.isFinite(n)&&n>0?n:5}
+function assEscape(s=''){return String(s).replaceAll('\\','\\\\').replaceAll('{','\\{').replaceAll('}','\\}')}
+function titleToAssText(title,baseColor,highlightColor){const src=String(title||'').replace(/\r/g,'');let out='',last=0;const re=/\{\{([\s\S]*?)\}\}/g;let m;while((m=re.exec(src))){out+=assEscape(src.slice(last,m.index));out+=`{\\c${assColor(highlightColor,'#F4008A')}}${assEscape(m[1])}{\\c${assColor(baseColor,'#080808')}}`;last=m.index+m[0].length}out+=assEscape(src.slice(last));return out.replaceAll('\n','\\N')}
+async function createTitleAss(jobDir,title,s){const file=path.join(jobDir,'title.ass');const an=s.title.align==='right'?9:s.title.align==='center'?8:7,x=s.title.align==='right'?1025:s.title.align==='center'?540:55,text=titleToAssText(title,s.title.color,s.title.highlightColor);const social=s.title.socialHeader?`Dialogue: 0,0:00:00.00,9:59:59.00,Channel,,0,0,0,,{\\an7\\pos(145,48)}${assEscape(s.title.channelName)}\nDialogue: 0,0:00:00.00,9:59:59.00,Handle,,0,0,0,,{\\an7\\pos(145,102)}${assEscape(s.title.handle)}\nDialogue: 0,0:00:00.00,9:59:59.00,Avatar,,0,0,0,,{\\an7\\pos(58,50)}●\n`:'';const ass=`[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\nWrapStyle: 2\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding\nStyle: Title,Noto Sans CJK JP,${s.title.fontSize},${assColor(s.title.color,'#080808')},${assColor(s.title.highlightColor,'#F4008A')},&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,${an},55,55,0,1\nStyle: Channel,Noto Sans CJK JP,38,&H00080808,&H00080808,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1\nStyle: Handle,Noto Sans CJK JP,27,&H00606060,&H00606060,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1\nStyle: Avatar,Noto Sans CJK JP,78,&H00A95BFA,&H00A95BFA,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1\n\n[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\n${social}Dialogue: 0,0:00:00.00,9:59:59.00,Title,,0,0,0,,{\\an${an}\\pos(${x},${s.title.y})}${text}\n`;await writeFile(file,ass,'utf8');return file}
+function subtitlesFilter(file){return `subtitles='${file.replaceAll("'","'\\''")}':fontsdir='/usr/share/fonts/opentype/noto'`}
+export async function renderThumbnail({clip,title,style={},timestamp=1}){if(!clip?.downloadUrl)throw new Error('clip is required');const s=normalizeStyle(style);await mkdir(ROOT,{recursive:true});await mkdir(OUTPUT_DIR,{recursive:true});const id=crypto.randomUUID(),jobDir=path.join(ROOT,`thumb-${id}`);await mkdir(jobDir,{recursive:true});const input=path.join(jobDir,'input.mp4');await download(clip.downloadUrl,input);const ass=await createTitleAss(jobDir,title,s),output=path.join(OUTPUT_DIR,`${id}.jpg`),videoHeight=1920-s.title.backgroundHeight;const filters=`scale=1080:${videoHeight}:force_original_aspect_ratio=increase,crop=1080:${videoHeight},pad=1080:1920:0:${s.title.backgroundHeight}:color=${ffColor(s.title.backgroundColor,'#FFFFFF')},${subtitlesFilter(ass)}`;await run('ffmpeg',['-y','-threads',FFMPEG_THREADS,'-ss',String(Math.max(0,Number(timestamp)||0)),'-i',input,'-frames:v','1','-vf',filters,'-q:v','2',output]);return{id,filename:`${id}.jpg`,url:`/renders/${id}.jpg`,width:1080,height:1920}}
+export async function renderShort({clips,title,captions=[],style={},music=null}){if(!Array.isArray(clips)||clips.length<1)throw new Error('At least one clip is required');const s=normalizeStyle(style);await mkdir(ROOT,{recursive:true});await mkdir(OUTPUT_DIR,{recursive:true});const id=crypto.randomUUID(),jobDir=path.join(ROOT,id);await mkdir(jobDir,{recursive:true});const selected=clips.slice(0,6),durations=selected.map(clipDuration),sourceDuration=durations.reduce((a,b)=>a+b,0);let targetDuration=sourceDuration,musicStart=0,musicVolume=.9,musicFile=null;if(music?.url){musicFile=localMusicPath(music.url);musicStart=Math.max(0,Number(music.start)||0);musicVolume=clamp(music.volume,0,2,.9);const requested=Number(music.duration);if(Number.isFinite(requested)&&requested>0)targetDuration=Math.min(sourceDuration,requested)}const normalized=[],videoHeight=1920-s.title.backgroundHeight;let remaining=targetDuration;for(let i=0;i<selected.length&&remaining>0;i+=1){const use=Math.min(durations[i],remaining),input=path.join(jobDir,`input-${i}.mp4`),out=path.join(jobDir,`clip-${i}.mp4`);await download(selected[i].downloadUrl,input);await run('ffmpeg',['-y','-threads',FFMPEG_THREADS,'-filter_threads',FFMPEG_THREADS,'-i',input,'-t',String(use),'-an','-vf',`scale=1080:${videoHeight}:force_original_aspect_ratio=increase,crop=1080:${videoHeight},fps=30,format=yuv420p`,'-c:v','libx264','-threads',FFMPEG_THREADS,'-preset','ultrafast','-crf','24','-pix_fmt','yuv420p','-movflags','+faststart',out]);normalized.push(out);remaining-=use}const concatFile=path.join(jobDir,'concat.txt');await writeFile(concatFile,normalized.map(p=>`file '${p.replaceAll("'","'\\''")}'`).join('\n'));const joined=path.join(jobDir,'joined.mp4');await run('ffmpeg',['-y','-threads',FFMPEG_THREADS,'-f','concat','-safe','0','-i',concatFile,'-c','copy',joined]);const ass=await createTitleAss(jobDir,title,s),videoOnly=path.join(jobDir,'video.mp4'),output=path.join(OUTPUT_DIR,`${id}.mp4`);const captionFilters=captions.slice(0,8).map((line,idx)=>{const block=targetDuration/Math.max(captions.length,1),start=idx*block+Math.min(.4,block*.12),end=Math.min(targetDuration,(idx+1)*block-Math.min(.2,block*.06));return `drawtext=fontfile='${FONT}':text='${escDrawtext(line)}':fontcolor=${ffColor(s.caption.color,'#FFE600')}:fontsize=${s.caption.fontSize}:borderw=${s.caption.strokeWidth}:bordercolor=${ffColor(s.caption.strokeColor,'#000000')}:x=${alignX(s.caption.align)}:y=h-${s.caption.bottom}:enable='between(t,${start.toFixed(2)},${end.toFixed(2)})'`});const filters=[`pad=1080:1920:0:${s.title.backgroundHeight}:color=${ffColor(s.title.backgroundColor,'#FFFFFF')}`,subtitlesFilter(ass),...captionFilters].join(',');await run('ffmpeg',['-y','-threads',FFMPEG_THREADS,'-filter_threads',FFMPEG_THREADS,'-i',joined,'-t',String(targetDuration),'-vf',filters,'-an','-c:v','libx264','-threads',FFMPEG_THREADS,'-preset','ultrafast','-crf','23','-pix_fmt','yuv420p','-movflags','+faststart',videoOnly]);if(musicFile)await run('ffmpeg',['-y','-threads',FFMPEG_THREADS,'-i',videoOnly,'-ss',String(musicStart),'-t',String(targetDuration),'-i',musicFile,'-filter:a',`volume=${musicVolume}`,'-map','0:v:0','-map','1:a:0','-c:v','copy','-c:a','aac','-b:a','192k','-shortest','-movflags','+faststart',output]);else await run('ffmpeg',['-y','-i',videoOnly,'-c','copy',output]);return{id,filename:`${id}.mp4`,url:`/renders/${id}.mp4`,duration:Number(targetDuration.toFixed(2)),sourceDuration:Number(sourceDuration.toFixed(2)),clipDurations:durations,music:musicFile?{start:musicStart,volume:musicVolume}:null,style:s}}
