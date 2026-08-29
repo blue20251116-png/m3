@@ -8,8 +8,46 @@ const ROOT=process.env.WORK_DIR||'/tmp/m3-shorts';
 const OUTPUT_DIR=process.env.OUTPUT_DIR||path.join(process.cwd(),'public','renders');
 const THREADS=String(Math.max(1,Math.min(4,Number(process.env.FFMPEG_THREADS||2))));
 const PROFILE_DIR=path.join(process.cwd(),'public','profiles');
-const TITLE_FONTS={heavy:{name:'Noto Sans CJK JP',bold:-1,scaleX:100,spacing:0},wide:{name:'Noto Sans CJK JP',bold:-1,scaleX:108,spacing:0},condensed:{name:'Noto Sans CJK JP',bold:-1,scaleX:88,spacing:-1},clean:{name:'Noto Sans CJK JP',bold:0,scaleX:100,spacing:0},mono:{name:'Noto Sans Mono CJK JP',bold:-1,scaleX:100,spacing:0},serif:{name:'Noto Serif CJK JP',bold:-1,scaleX:100,spacing:0},serifWide:{name:'Noto Serif CJK JP',bold:-1,scaleX:106,spacing:1}};
-const CAPTION_FONT_FILES={heavy:'/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc',wide:'/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc',condensed:'/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc',clean:'/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',mono:'/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc',serif:'/usr/share/fonts/opentype/noto/NotoSerifCJK-Bold.ttc',serifWide:'/usr/share/fonts/opentype/noto/NotoSerifCJK-Bold.ttc'};
+const TITLE_FONTS={
+  heavy:{name:'Noto Sans CJK JP',bold:-1,scaleX:100,spacing:0},
+  clean:{name:'Noto Sans CJK JP',bold:0,scaleX:100,spacing:0},
+  serif:{name:'Noto Serif CJK JP',bold:-1,scaleX:100,spacing:0},
+  wide:{name:'Noto Sans CJK JP',bold:-1,scaleX:108,spacing:0},
+  condensed:{name:'Noto Sans CJK JP',bold:-1,scaleX:88,spacing:-1},
+  mono:{name:'Noto Sans Mono CJK JP',bold:-1,scaleX:100,spacing:0},
+  serifWide:{name:'Noto Serif CJK JP',bold:-1,scaleX:106,spacing:1},
+  mplusBlack:{name:'M PLUS 1',bold:-1,scaleX:100,spacing:0},
+  mplusBold:{name:'M PLUS 1',bold:-1,scaleX:100,spacing:0},
+  mplusRegular:{name:'M PLUS 1',bold:0,scaleX:100,spacing:0},
+  vlGothic:{name:'VL Gothic',bold:0,scaleX:100,spacing:0},
+  vlPGothic:{name:'VL PGothic',bold:0,scaleX:100,spacing:0},
+  bizGothic:{name:'BIZ UD Gothic',bold:-1,scaleX:100,spacing:0},
+  bizPGothic:{name:'BIZ UDPGothic',bold:-1,scaleX:100,spacing:0},
+  bizMincho:{name:'BIZ UDMincho',bold:0,scaleX:100,spacing:0},
+  ipaGothic:{name:'IPAGothic',bold:0,scaleX:100,spacing:0},
+  ipaPGothic:{name:'IPAPGothic',bold:0,scaleX:100,spacing:0},
+  ipaMincho:{name:'IPAMincho',bold:0,scaleX:100,spacing:0}
+};
+const CAPTION_FONT_FILES={
+  heavy:'/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc',
+  clean:'/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+  serif:'/usr/share/fonts/opentype/noto/NotoSerifCJK-Bold.ttc',
+  wide:'/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc',
+  condensed:'/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc',
+  mono:'/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc',
+  serifWide:'/usr/share/fonts/opentype/noto/NotoSerifCJK-Bold.ttc',
+  mplusBlack:'/usr/share/fonts/opentype/mplus/Mplus1-Black.otf',
+  mplusBold:'/usr/share/fonts/opentype/mplus/Mplus1-Bold.otf',
+  mplusRegular:'/usr/share/fonts/opentype/mplus/Mplus1-Regular.otf',
+  vlGothic:'/usr/share/fonts/truetype/vlgothic/VL-Gothic-Regular.ttf',
+  vlPGothic:'/usr/share/fonts/truetype/vlgothic/VL-PGothic-Regular.ttf',
+  bizGothic:'/usr/share/fonts/truetype/bizud-gothic/BIZUDGothic-Bold.ttf',
+  bizPGothic:'/usr/share/fonts/truetype/bizud-gothic/BIZUDPGothic-Bold.ttf',
+  bizMincho:'/usr/share/fonts/truetype/bizud-mincho/BIZUDMincho-Regular.ttf',
+  ipaGothic:'/usr/share/fonts/opentype/ipafont-gothic/ipag.ttf',
+  ipaPGothic:'/usr/share/fonts/opentype/ipafont-gothic/ipagp.ttf',
+  ipaMincho:'/usr/share/fonts/opentype/ipafont-mincho/ipam.ttf'
+};
 const DEF={title:{fontSize:72,color:'#080808',backgroundColor:'#FFFFFF',backgroundHeight:430,y:210,align:'left',socialHeader:true,channelName:'M3 Shorts',handle:'@m3shorts',profileImagePath:'',fontKey:'heavy',titleRuns:[],strokeColor:'#000000',strokeWidth:0,shadowColor:'#000000',shadowSize:0},caption:{fontKey:'heavy',fontSize:54,color:'#FFFFFF',strokeColor:'#000000',strokeWidth:5,shadowColor:'#000000',shadowSize:4,bottom:270,align:'center'}};
 function run(cmd,args){return new Promise((resolve,reject)=>{const c=spawn(cmd,args,{stdio:['ignore','pipe','pipe']});let err='';c.stderr.on('data',d=>err+=d.toString());c.on('error',reject);c.on('close',(code,signal)=>code===0?resolve():reject(new Error(`${cmd} exited ${signal||code}: ${err.slice(-2400)}`)))})}
 async function download(url,dst){const r=await fetch(url);if(!r.ok)throw new Error(`Download failed ${r.status}`);await writeFile(dst,Buffer.from(await r.arrayBuffer()))}
@@ -25,7 +63,7 @@ function normalizeRuns(v,len){if(!Array.isArray(v))return[];return v.slice(0,200
 function norm(style={}){const t=style.title||{},c=style.caption||{},social=t.socialHeader!==false;const titleTextLen=10000;return{title:{fontSize:clamp(t.fontSize,28,110,DEF.title.fontSize),color:hex(t.color,DEF.title.color),backgroundColor:social?'#FFFFFF':hex(t.backgroundColor,DEF.title.backgroundColor),backgroundHeight:clamp(t.backgroundHeight,300,620,DEF.title.backgroundHeight),y:clamp(t.y,120,520,DEF.title.y),align:['left','center','right'].includes(t.align)?t.align:'left',socialHeader:social,channelName:String(t.channelName||DEF.title.channelName).slice(0,50),handle:String(t.handle||DEF.title.handle).slice(0,60),profileImagePath:safeProfile(t.profileImagePath),fontKey:fontKey(t.fontKey),titleRuns:normalizeRuns(t.titleRuns,titleTextLen),strokeColor:hex(t.strokeColor,DEF.title.strokeColor),strokeWidth:clamp(t.strokeWidth,0,12,0),shadowColor:hex(t.shadowColor,DEF.title.shadowColor),shadowSize:clamp(t.shadowSize,0,12,0)},caption:{fontKey:fontKey(c.fontKey),fontSize:clamp(c.fontSize,24,100,DEF.caption.fontSize),color:hex(c.color,DEF.caption.color),strokeColor:hex(c.strokeColor,DEF.caption.strokeColor),strokeWidth:clamp(c.strokeWidth,0,12,DEF.caption.strokeWidth),shadowColor:hex(c.shadowColor,DEF.caption.shadowColor),shadowSize:clamp(c.shadowSize,0,12,DEF.caption.shadowSize),bottom:clamp(c.bottom,80,700,DEF.caption.bottom),align:['left','center','right'].includes(c.align)?c.align:'center'}}}
 function titleAssText(title,base,runs){const src=String(title||'').replace(/\r/g,'');if(!runs.length)return assEsc(src).replaceAll('\n','\\N');const points=new Set([0,src.length]);for(const r of runs){points.add(Math.max(0,Math.min(src.length,r.start)));points.add(Math.max(0,Math.min(src.length,r.end)))}const p=[...points].sort((a,b)=>a-b);let out='';for(let i=0;i<p.length-1;i++){const a=p[i],b=p[i+1];if(b<=a)continue;const color=[...runs].reverse().find(r=>a>=r.start&&a<r.end)?.color||base;out+=`{\\c${assColor(color,base)}}${assEsc(src.slice(a,b))}`}return out.replaceAll('\n','\\N')}
 async function createTitleAss(dir,title,s){const file=path.join(dir,'title.ass'),f=TITLE_FONTS[s.title.fontKey],an=s.title.align==='right'?9:s.title.align==='center'?8:7,x=s.title.align==='right'?1010:s.title.align==='center'?540:70,text=titleAssText(title,s.title.color,s.title.titleRuns),outline=assColor(s.title.strokeColor,'#000000'),shadow=assColor(s.title.shadowColor,'#000000');const social=s.title.socialHeader?`Dialogue: 0,0:00:00.00,9:59:59.00,Channel,,0,0,0,,{\\an7\\pos(155,45)}${assEsc(s.title.channelName)}\nDialogue: 0,0:00:00.00,9:59:59.00,Handle,,0,0,0,,{\\an7\\pos(155,100)}${assEsc(s.title.handle)}\n`:'';const ass=`[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\nWrapStyle: 2\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding\nStyle: Title,${f.name},${s.title.fontSize},${assColor(s.title.color,'#080808')},${assColor(s.title.color,'#080808')},${outline},${shadow},${f.bold},0,0,0,${f.scaleX},100,${f.spacing},0,1,${s.title.strokeWidth},${s.title.shadowSize},${an},70,70,0,1\nStyle: Channel,${f.name},38,&H00080808,&H00080808,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1\nStyle: Handle,${f.name},27,&H00606060,&H00606060,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1\n\n[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\n${social}Dialogue: 0,0:00:00.00,9:59:59.00,Title,,0,0,0,,{\\an${an}\\pos(${x},${s.title.y})}${text}\n`;await writeFile(file,ass,'utf8');return file}
-function subs(file){return `subtitles='${file.replaceAll("'","'\\''")}':fontsdir='/usr/share/fonts/opentype/noto'`}
+function subs(file){return `subtitles='${file.replaceAll("'","'\\''")}'`}
 async function addProfile(input,output,profile,isImage=false){if(!profile)return false;try{const filter='[1:v]scale=86:86:force_original_aspect_ratio=increase,crop=86:86[avatar];[0:v][avatar]overlay=50:35:format=auto[out]';const args=['-y','-i',input,'-i',profile,'-filter_complex',filter,'-map','[out]'];if(isImage)args.push('-frames:v','1','-q:v','2');else args.push('-map','0:a?','-c:v','libx264','-preset','ultrafast','-crf','23','-pix_fmt','yuv420p','-c:a','copy','-movflags','+faststart');args.push(output);await run('ffmpeg',args);return true}catch(e){console.warn('[PROFILE]',e.message);return false}}
 function captionPlan(caps,d){const src=Array.isArray(caps)?caps:[],fallback=d/Math.max(src.length,1);return src.map((x,i)=>{if(x&&typeof x==='object'){const text=String(x.text||'').trim(),start=clamp(x.start,0,d,i*fallback),end=clamp(x.end,0,d,Math.min(d,(i+1)*fallback));return{text,start,end}}const text=String(x||'').trim();return{text,start:i*fallback,end:Math.min(d,(i+1)*fallback)}}).filter(x=>x.text&&x.end>x.start)}
 function xExpr(a){return a==='left'?'70':a==='right'?'w-text_w-70':'(w-text_w)/2'}
