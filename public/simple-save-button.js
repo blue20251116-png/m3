@@ -7,8 +7,9 @@
   function num(...ids){for(const id of ids){const e=$(id);if(e&&e.value!==''&&Number.isFinite(+e.value))return +e.value}return undefined}
   function val(...ids){for(const id of ids){const e=$(id);if(e&&e.value!=='')return e.value}return undefined}
   function readEditorState(){try{return JSON.parse(localStorage.getItem('m3VisualEditorState')||'{}')||{}}catch{return{}}}
+  function readInstagram(){try{return JSON.parse(localStorage.getItem('m3InstagramTemplate')||'{}')||{}}catch{return{}}}
   function readStyle(){
-    const title={},caption={},saved=readEditorState();
+    const title={},caption={},saved=readEditorState(),ig=readInstagram();
     const fontSize=num('veTitleSize','titleSize');if(fontSize!=null)title.fontSize=fontSize;
     const align=val('veTitleAlign','titleAlign');if(align)title.align=align;
     const color=val('veTitleColor','titleColor');if(color)title.color=color;
@@ -20,11 +21,12 @@
     const titleY=num('titleY');if(titleY!=null)title.y=titleY;
     const top=num('igTopSpace','barHeight');if(top!=null)title.backgroundHeight=top;
     const bottom=num('igBottomSpace');if(bottom!=null)title.bottomSpace=bottom;
+    const headerOffset=num('igHeaderTopGap');title.headerOffset=headerOffset!=null?headerOffset:(Number(ig.headerTopGap)||0);
     title.backgroundColor='#FFFFFF';title.socialHeader=true;
     const name=val('igChannelName');if(name!=null)title.channelName=name;
     const handle=val('igHandle');if(handle!=null)title.handle=handle;
     if(Array.isArray(saved.titleRuns))title.titleRuns=saved.titleRuns;
-    try{const s=JSON.parse(localStorage.getItem('m3InstagramTemplate')||'{}');if(s.profilePath)title.profileImagePath=s.profilePath}catch{}
+    title.profileImagePath=window.m3InstagramProfilePath||ig.profilePath||'';
     const cfont=val('veCaptionFont','captionFont');if(cfont)caption.fontKey=cfont;
     const csize=num('veCaptionSize','captionSize');if(csize!=null)caption.fontSize=csize;
     const calign=val('veCaptionAlign','captionAlign');if(calign)caption.align=calign;
