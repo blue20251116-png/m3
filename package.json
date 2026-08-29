@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "start": "node src/server.js",
-    "check": "node --check src/server.js && node --check src/stockVideoProvider.js && node --check src/japaneseCopyGenerator.js"
+    "check": "node --check src/server.js && node --check src/stockVideoProvider.js && node --check src/japaneseCopyGenerator.js",
+    "test": "node --test test/*.test.mjs"
   },
   "engines": {
     "node": ">=22"

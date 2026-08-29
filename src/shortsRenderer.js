@@ -4,31 +4,248 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { localMusicPath } from './musicStore.js';
 
-const ROOT=process.env.WORK_DIR||'/tmp/m3-shorts';
-const OUTPUT_DIR=process.env.OUTPUT_DIR||path.join(process.cwd(),'public','renders');
-const THREADS=String(Math.max(1,Math.min(4,Number(process.env.FFMPEG_THREADS||2))));
-const PROFILE_DIR=path.join(process.cwd(),'public','profiles');
-const TITLE_FONTS={heavy:{name:'Noto Sans CJK JP',bold:-1,scaleX:100,spacing:0},clean:{name:'Noto Sans CJK JP',bold:0,scaleX:100,spacing:0},serif:{name:'Noto Serif CJK JP',bold:-1,scaleX:100,spacing:0},wide:{name:'Noto Sans CJK JP',bold:-1,scaleX:108,spacing:0},condensed:{name:'Noto Sans CJK JP',bold:-1,scaleX:88,spacing:-1},mono:{name:'Noto Sans Mono CJK JP',bold:-1,scaleX:100,spacing:0},serifWide:{name:'Noto Serif CJK JP',bold:-1,scaleX:106,spacing:1},mplusBlack:{name:'M PLUS 1',bold:-1,scaleX:100,spacing:0},mplusBold:{name:'M PLUS 1',bold:-1,scaleX:100,spacing:0},mplusRegular:{name:'M PLUS 1',bold:0,scaleX:100,spacing:0},vlGothic:{name:'VL Gothic',bold:0,scaleX:100,spacing:0},vlPGothic:{name:'VL PGothic',bold:0,scaleX:100,spacing:0},bizGothic:{name:'BIZ UD Gothic',bold:-1,scaleX:100,spacing:0},bizPGothic:{name:'BIZ UDPGothic',bold:-1,scaleX:100,spacing:0},bizMincho:{name:'BIZ UDMincho',bold:0,scaleX:100,spacing:0},ipaGothic:{name:'IPAGothic',bold:0,scaleX:100,spacing:0},ipaPGothic:{name:'IPAPGothic',bold:0,scaleX:100,spacing:0},ipaMincho:{name:'IPAMincho',bold:0,scaleX:100,spacing:0}};
-const CAPTION_FONT_FILES={heavy:'/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc',clean:'/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',serif:'/usr/share/fonts/opentype/noto/NotoSerifCJK-Bold.ttc',wide:'/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc',condensed:'/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc',mono:'/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc',serifWide:'/usr/share/fonts/opentype/noto/NotoSerifCJK-Bold.ttc',mplusBlack:'/usr/share/fonts/opentype/mplus/Mplus1-Black.otf',mplusBold:'/usr/share/fonts/opentype/mplus/Mplus1-Bold.otf',mplusRegular:'/usr/share/fonts/opentype/mplus/Mplus1-Regular.otf',vlGothic:'/usr/share/fonts/truetype/vlgothic/VL-Gothic-Regular.ttf',vlPGothic:'/usr/share/fonts/truetype/vlgothic/VL-PGothic-Regular.ttf',bizGothic:'/usr/share/fonts/truetype/bizud-gothic/BIZUDGothic-Bold.ttf',bizPGothic:'/usr/share/fonts/truetype/bizud-gothic/BIZUDPGothic-Bold.ttf',bizMincho:'/usr/share/fonts/truetype/bizud-mincho/BIZUDMincho-Regular.ttf',ipaGothic:'/usr/share/fonts/opentype/ipafont-gothic/ipag.ttf',ipaPGothic:'/usr/share/fonts/opentype/ipafont-gothic/ipagp.ttf',ipaMincho:'/usr/share/fonts/opentype/ipafont-mincho/ipam.ttf'};
-const DEF={title:{fontSize:72,color:'#080808',backgroundColor:'#FFFFFF',backgroundHeight:430,bottomSpace:140,y:210,align:'left',socialHeader:true,channelName:'M3 Shorts',handle:'@m3shorts',profileImagePath:'',headerOffset:60,fontKey:'heavy',titleRuns:[],strokeColor:'#000000',strokeWidth:0,shadowColor:'#000000',shadowSize:0},caption:{fontKey:'heavy',fontSize:54,color:'#FFFFFF',strokeColor:'#000000',strokeWidth:5,shadowColor:'#000000',shadowSize:4,bottom:270,align:'center'}};
-function run(cmd,args){return new Promise((resolve,reject)=>{const c=spawn(cmd,args,{stdio:['ignore','pipe','pipe']});let err='';c.stderr.on('data',d=>err+=d.toString());c.on('error',reject);c.on('close',(code,signal)=>code===0?resolve():reject(new Error(`${cmd} exited ${signal||code}: ${err.slice(-2400)}`)))})}
-async function download(url,dst){const r=await fetch(url);if(!r.ok)throw new Error(`Download failed ${r.status}`);await writeFile(dst,Buffer.from(await r.arrayBuffer()))}
-function clamp(v,min,max,f){const n=Number(v);return Number.isFinite(n)?Math.max(min,Math.min(max,n)):f}
-function hex(v,f){const s=String(v||'').toUpperCase();return /^#[0-9A-F]{6}$/.test(s)?s:f}
-function ffColor(v,f){return `0x${hex(v,f).slice(1)}`}
-function assColor(v,f){const h=hex(v,f).slice(1);return `&H00${h.slice(4,6)}${h.slice(2,4)}${h.slice(0,2)}&`}
-function escDrawtext(s=''){return String(s).replaceAll('\\','\\\\').replaceAll(':','\\:').replaceAll("'","\\'").replaceAll('%','\\%').replaceAll('\n',' ')}
-function assEsc(s=''){return String(s).replaceAll('\\','\\\\').replaceAll('{','\\{').replaceAll('}','\\}')}
-function safeProfile(v){if(!v)return'';const b=path.basename(String(v));return b?path.join(PROFILE_DIR,b):''}
-function fontKey(k){return Object.hasOwn(TITLE_FONTS,String(k))?String(k):'heavy'}
-function normalizeRuns(v,len){if(!Array.isArray(v))return[];return v.slice(0,200).map(x=>({start:clamp(x?.start,0,len,0),end:clamp(x?.end,0,len,0),color:hex(x?.color,'#F4008A')})).filter(x=>x.end>x.start)}
-function norm(style={}){const t=style.title||{},c=style.caption||{},social=t.socialHeader!==false;const titleTextLen=10000;return{title:{fontSize:clamp(t.fontSize,28,110,DEF.title.fontSize),color:hex(t.color,DEF.title.color),backgroundColor:social?'#FFFFFF':hex(t.backgroundColor,DEF.title.backgroundColor),backgroundHeight:clamp(t.backgroundHeight,300,620,DEF.title.backgroundHeight),bottomSpace:clamp(t.bottomSpace,0,400,DEF.title.bottomSpace),y:clamp(t.y,120,520,DEF.title.y),align:['left','center','right'].includes(t.align)?t.align:'left',socialHeader:social,channelName:String(t.channelName||DEF.title.channelName).slice(0,50),handle:String(t.handle||DEF.title.handle).slice(0,60),profileImagePath:safeProfile(t.profileImagePath),headerOffset:clamp(t.headerOffset,0,180,DEF.title.headerOffset),fontKey:fontKey(t.fontKey),titleRuns:normalizeRuns(t.titleRuns,titleTextLen),strokeColor:hex(t.strokeColor,DEF.title.strokeColor),strokeWidth:clamp(t.strokeWidth,0,12,0),shadowColor:hex(t.shadowColor,DEF.title.shadowColor),shadowSize:clamp(t.shadowSize,0,12,0)},caption:{fontKey:fontKey(c.fontKey),fontSize:clamp(c.fontSize,24,100,DEF.caption.fontSize),color:hex(c.color,DEF.caption.color),strokeColor:hex(c.strokeColor,DEF.caption.strokeColor),strokeWidth:clamp(c.strokeWidth,0,12,DEF.caption.strokeWidth),shadowColor:hex(c.shadowColor,DEF.caption.shadowColor),shadowSize:clamp(c.shadowSize,0,12,DEF.caption.shadowSize),bottom:clamp(c.bottom,80,700,DEF.caption.bottom),align:['left','center','right'].includes(c.align)?c.align:'center'}}}
-function titleAssText(title,base,runs){const src=String(title||'').replace(/\r/g,'');if(!runs.length)return assEsc(src).replaceAll('\n','\\N');const points=new Set([0,src.length]);for(const r of runs){points.add(Math.max(0,Math.min(src.length,r.start)));points.add(Math.max(0,Math.min(src.length,r.end)))}const p=[...points].sort((a,b)=>a-b);let out='';for(let i=0;i<p.length-1;i++){const a=p[i],b=p[i+1];if(b<=a)continue;const color=[...runs].reverse().find(r=>a>=r.start&&a<r.end)?.color||base;out+=`{\\c${assColor(color,base)}}${assEsc(src.slice(a,b))}`}return out.replaceAll('\n','\\N')}
-async function createTitleAss(dir,title,s){const file=path.join(dir,'title.ass'),f=TITLE_FONTS[s.title.fontKey],an=s.title.align==='right'?9:s.title.align==='center'?8:7,x=s.title.align==='right'?1010:s.title.align==='center'?540:70,text=titleAssText(title,s.title.color,s.title.titleRuns),outline=assColor(s.title.strokeColor,'#000000'),shadow=assColor(s.title.shadowColor,'#000000'),o=s.title.headerOffset;const social=s.title.socialHeader?`Dialogue: 0,0:00:00.00,9:59:59.00,Channel,,0,0,0,,{\\an7\\pos(155,${45+o})}${assEsc(s.title.channelName)}\nDialogue: 0,0:00:00.00,9:59:59.00,Handle,,0,0,0,,{\\an7\\pos(155,${100+o})}${assEsc(s.title.handle)}\n`:'';const ass=`[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\nWrapStyle: 2\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding\nStyle: Title,${f.name},${s.title.fontSize},${assColor(s.title.color,'#080808')},${assColor(s.title.color,'#080808')},${outline},${shadow},${f.bold},0,0,0,${f.scaleX},100,${f.spacing},0,1,${s.title.strokeWidth},${s.title.shadowSize},${an},70,70,0,1\nStyle: Channel,${f.name},38,&H00080808,&H00080808,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,0,7,0,0,0,1\nStyle: Handle,${f.name},27,&H00606060,&H00606060,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,0,7,0,0,0,1\n\n[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\n${social}Dialogue: 0,0:00:00.00,9:59:59.00,Title,,0,0,0,,{\\an${an}\\pos(${x},${s.title.y})}${text}\n`;await writeFile(file,ass,'utf8');return file}
-function subs(file){return `subtitles='${file.replaceAll("'","'\\''")}'`}
-async function addProfile(input,output,profile,isImage=false,headerOffset=0){if(!profile)return false;try{const oy=35+clamp(headerOffset,0,180,0),filter=`[1:v]scale=86:86:force_original_aspect_ratio=increase,crop=86:86[avatar];[0:v][avatar]overlay=50:${oy}:format=auto[out]`;const args=['-y','-i',input,'-i',profile,'-filter_complex',filter,'-map','[out]'];if(isImage)args.push('-frames:v','1','-q:v','2');else args.push('-map','0:a?','-c:v','libx264','-preset','ultrafast','-crf','23','-pix_fmt','yuv420p','-c:a','copy','-movflags','+faststart');args.push(output);await run('ffmpeg',args);return true}catch(e){console.warn('[PROFILE]',e.message);return false}}
-function captionPlan(caps,d){const src=Array.isArray(caps)?caps:[],fallback=d/Math.max(src.length,1);return src.map((x,i)=>{if(x&&typeof x==='object'){const text=String(x.text||'').trim(),start=clamp(x.start,0,d,i*fallback),end=clamp(x.end,0,d,Math.min(d,(i+1)*fallback));return{text,start,end}}const text=String(x||'').trim();return{text,start:i*fallback,end:Math.min(d,(i+1)*fallback)}}).filter(x=>x.text&&x.end>x.start)}
-function xExpr(a){return a==='left'?'70':a==='right'?'w-text_w-70':'(w-text_w)/2'}
-function clipDuration(c){const n=Number(c?.duration);return Number.isFinite(n)&&n>0?n:5}
-export async function renderThumbnail({clip,title,style={},timestamp=1}){if(!clip?.downloadUrl)throw new Error('clip is required');const s=norm(style);await mkdir(ROOT,{recursive:true});await mkdir(OUTPUT_DIR,{recursive:true});const id=crypto.randomUUID(),dir=path.join(ROOT,`thumb-${id}`);await mkdir(dir,{recursive:true});const input=path.join(dir,'in.mp4');await download(clip.downloadUrl,input);const ass=await createTitleAss(dir,title,s),base=path.join(dir,'base.jpg'),out=path.join(OUTPUT_DIR,`${id}.jpg`),vh=1920-s.title.backgroundHeight-s.title.bottomSpace;await run('ffmpeg',['-y','-threads',THREADS,'-ss',String(Math.max(0,+timestamp||0)),'-i',input,'-frames:v','1','-vf',`scale=1080:${vh}:force_original_aspect_ratio=increase,crop=1080:${vh},pad=1080:1920:0:${s.title.backgroundHeight}:color=${ffColor(s.title.backgroundColor,'#FFFFFF')},${subs(ass)}`,'-q:v','2',base]);if(!(await addProfile(base,out,s.title.profileImagePath,true,s.title.headerOffset)))await run('ffmpeg',['-y','-i',base,'-frames:v','1','-q:v','2',out]);return{id,filename:`${id}.jpg`,url:`/renders/${id}.jpg`,width:1080,height:1920}}
-export async function renderShort({clips,title,captions=[],style={},music=null}){if(!Array.isArray(clips)||!clips.length)throw new Error('At least one clip is required');const s=norm(style);await mkdir(ROOT,{recursive:true});await mkdir(OUTPUT_DIR,{recursive:true});const id=crypto.randomUUID(),dir=path.join(ROOT,id);await mkdir(dir,{recursive:true});const selected=clips.slice(0,6),durations=selected.map(clipDuration),source=durations.reduce((a,b)=>a+b,0);let target=source,musicFile=null,musicStart=0,musicVolume=.9;if(music?.url){musicFile=localMusicPath(music.url);musicStart=Math.max(0,+music.start||0);musicVolume=clamp(music.volume,0,2,.9);if(+music.duration>0)target=Math.min(source,+music.duration)}const vh=1920-s.title.backgroundHeight-s.title.bottomSpace,norms=[];let remain=target;for(let i=0;i<selected.length&&remain>0;i++){const use=Math.min(durations[i],remain),input=path.join(dir,`input-${i}.mp4`),out=path.join(dir,`clip-${i}.mp4`);await download(selected[i].downloadUrl,input);await run('ffmpeg',['-y','-threads',THREADS,'-i',input,'-t',String(use),'-an','-vf',`scale=1080:${vh}:force_original_aspect_ratio=increase,crop=1080:${vh},fps=30,format=yuv420p`,'-c:v','libx264','-preset','ultrafast','-crf','24','-pix_fmt','yuv420p',out]);norms.push(out);remain-=use}const list=path.join(dir,'concat.txt');await writeFile(list,norms.map(p=>`file '${p.replaceAll("'","'\\''")}'`).join('\n'));const joined=path.join(dir,'joined.mp4');await run('ffmpeg',['-y','-f','concat','-safe','0','-i',list,'-c','copy',joined]);const ass=await createTitleAss(dir,title,s),base=path.join(dir,'base.mp4'),profile=path.join(dir,'profile.mp4'),out=path.join(OUTPUT_DIR,`${id}.mp4`),fontFile=CAPTION_FONT_FILES[s.caption.fontKey]||CAPTION_FONT_FILES.heavy;const shadow=Math.max(0,s.caption.shadowSize),capFilters=captionPlan(captions,target).map(c=>`drawtext=fontfile='${fontFile}':text='${escDrawtext(c.text)}':fontcolor=${ffColor(s.caption.color,'#FFFFFF')}:fontsize=${s.caption.fontSize}:borderw=${s.caption.strokeWidth}:bordercolor=${ffColor(s.caption.strokeColor,'#000000')}:shadowcolor=${ffColor(s.caption.shadowColor,'#000000')}:shadowx=${shadow}:shadowy=${shadow}:x=${xExpr(s.caption.align)}:y=h-${s.caption.bottom}:enable='between(t,${c.start.toFixed(2)},${c.end.toFixed(2)})'`),filters=[`pad=1080:1920:0:${s.title.backgroundHeight}:color=${ffColor(s.title.backgroundColor,'#FFFFFF')}`,subs(ass),...capFilters].join(',');await run('ffmpeg',['-y','-threads',THREADS,'-i',joined,'-t',String(target),'-vf',filters,'-an','-c:v','libx264','-preset','ultrafast','-crf','23','-pix_fmt','yuv420p','-movflags','+faststart',base]);const has=await addProfile(base,profile,s.title.profileImagePath,false,s.title.headerOffset),video=has?profile:base;if(musicFile)await run('ffmpeg',['-y','-i',video,'-ss',String(musicStart),'-t',String(target),'-i',musicFile,'-filter:a',`volume=${musicVolume}`,'-map','0:v:0','-map','1:a:0','-c:v','copy','-c:a','aac','-b:a','192k','-shortest','-movflags','+faststart',out]);else await run('ffmpeg',['-y','-i',video,'-c','copy',out]);return{id,filename:`${id}.mp4`,url:`/renders/${id}.mp4`,duration:+target.toFixed(2),sourceDuration:+source.toFixed(2),style:s}}
+const ROOT = process.env.WORK_DIR || '/tmp/m3-shorts';
+const OUTPUT_DIR = process.env.OUTPUT_DIR || path.join(process.cwd(), 'public', 'renders');
+const THREADS = String(Math.max(1, Math.min(4, Number(process.env.FFMPEG_THREADS || 2))));
+const PROFILE_DIR = path.join(process.cwd(), 'public', 'profiles');
+
+// fontKey -> ASS font metrics. This table is the ONLY place title-font layout
+// (bold/ScaleX/Spacing) is decided; public/editor.js's FONTS table carries the
+// identical scaleX/spacing/bold numbers so the CSS preview stretches text by
+// the same amount ASS does. If you add a fontKey here, add it there too.
+const TITLE_FONTS = { heavy: { name: 'Noto Sans CJK JP', bold: -1, scaleX: 100, spacing: 0 }, clean: { name: 'Noto Sans CJK JP', bold: 0, scaleX: 100, spacing: 0 }, serif: { name: 'Noto Serif CJK JP', bold: -1, scaleX: 100, spacing: 0 }, wide: { name: 'Noto Sans CJK JP', bold: -1, scaleX: 108, spacing: 0 }, condensed: { name: 'Noto Sans CJK JP', bold: -1, scaleX: 88, spacing: -1 }, mono: { name: 'Noto Sans Mono CJK JP', bold: -1, scaleX: 100, spacing: 0 }, serifWide: { name: 'Noto Serif CJK JP', bold: -1, scaleX: 106, spacing: 1 }, mplusBlack: { name: 'M PLUS 1', bold: -1, scaleX: 100, spacing: 0 }, mplusBold: { name: 'M PLUS 1', bold: -1, scaleX: 100, spacing: 0 }, mplusRegular: { name: 'M PLUS 1', bold: 0, scaleX: 100, spacing: 0 }, vlGothic: { name: 'VL Gothic', bold: 0, scaleX: 100, spacing: 0 }, vlPGothic: { name: 'VL PGothic', bold: 0, scaleX: 100, spacing: 0 }, bizGothic: { name: 'BIZ UD Gothic', bold: -1, scaleX: 100, spacing: 0 }, bizPGothic: { name: 'BIZ UDPGothic', bold: -1, scaleX: 100, spacing: 0 }, bizMincho: { name: 'BIZ UDMincho', bold: 0, scaleX: 100, spacing: 0 }, ipaGothic: { name: 'IPAGothic', bold: 0, scaleX: 100, spacing: 0 }, ipaPGothic: { name: 'IPAPGothic', bold: 0, scaleX: 100, spacing: 0 }, ipaMincho: { name: 'IPAMincho', bold: 0, scaleX: 100, spacing: 0 } };
+const CAPTION_FONT_FILES = { heavy: '/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc', clean: '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc', serif: '/usr/share/fonts/opentype/noto/NotoSerifCJK-Bold.ttc', wide: '/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc', condensed: '/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc', mono: '/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc', serifWide: '/usr/share/fonts/opentype/noto/NotoSerifCJK-Bold.ttc', mplusBlack: '/usr/share/fonts/opentype/mplus/Mplus1-Black.otf', mplusBold: '/usr/share/fonts/opentype/mplus/Mplus1-Bold.otf', mplusRegular: '/usr/share/fonts/opentype/mplus/Mplus1-Regular.otf', vlGothic: '/usr/share/fonts/truetype/vlgothic/VL-Gothic-Regular.ttf', vlPGothic: '/usr/share/fonts/truetype/vlgothic/VL-PGothic-Regular.ttf', bizGothic: '/usr/share/fonts/truetype/bizud-gothic/BIZUDGothic-Bold.ttf', bizPGothic: '/usr/share/fonts/truetype/bizud-gothic/BIZUDPGothic-Bold.ttf', bizMincho: '/usr/share/fonts/truetype/bizud-mincho/BIZUDMincho-Regular.ttf', ipaGothic: '/usr/share/fonts/opentype/ipafont-gothic/ipag.ttf', ipaPGothic: '/usr/share/fonts/opentype/ipafont-gothic/ipagp.ttf', ipaMincho: '/usr/share/fonts/opentype/ipafont-mincho/ipam.ttf' };
+
+function run(cmd, args) { return new Promise((resolve, reject) => { const c = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] }); let err = ''; c.stderr.on('data', d => err += d.toString()); c.on('error', reject); c.on('close', (code, signal) => code === 0 ? resolve() : reject(new Error(`${cmd} exited ${signal || code}: ${err.slice(-2400)}`))); }); }
+async function download(url, dst) { const r = await fetch(url); if (!r.ok) throw new Error(`Download failed ${r.status}`); await writeFile(dst, Buffer.from(await r.arrayBuffer())); }
+function num(v, min, max, f) { const n = Number(v); return Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : f; }
+function hex(v, f) { const s = String(v || '').toUpperCase(); return /^#[0-9A-F]{6}$/.test(s) ? s : f; }
+function ffColor(v, f) { return `0x${hex(v, f).slice(1)}`; }
+function assColor(v, f) { const h = hex(v, f).slice(1); return `&H00${h.slice(4, 6)}${h.slice(2, 4)}${h.slice(0, 2)}&`; }
+function escDrawtext(s = '') { return String(s).replaceAll('\\', '\\\\').replaceAll(':', '\\:').replaceAll("'", "\\'").replaceAll('%', '\\%').replaceAll('\n', ' '); }
+function assEsc(s = '') { return String(s).replaceAll('\\', '\\\\').replaceAll('{', '\\{').replaceAll('}', '\\}'); }
+function safeProfile(v) { if (!v) return ''; const b = path.basename(String(v)); return b ? path.join(PROFILE_DIR, b) : ''; }
+function fontKey(k) { return Object.hasOwn(TITLE_FONTS, String(k)) ? String(k) : 'heavy'; }
+function normalizeRuns(v, len) { if (!Array.isArray(v)) return []; return v.slice(0, 200).map(x => ({ start: num(x?.start, 0, len, 0), end: num(x?.end, 0, len, 0), color: hex(x?.color, '#F4008A') })).filter(x => x.end > x.start); }
+function clipDuration(c) { const n = Number(c?.duration); return Number.isFinite(n) && n > 0 ? n : 5; }
+
+/*
+ * Validate/clamp a client-supplied templateState. This function may ONLY
+ * range-check and type-check values — it must never invent a coordinate
+ * relationship (e.g. "video.y = header.height") that the client didn't
+ * already send. Every x/y/width/height below is read from the matching
+ * client field, not recomputed from a sibling field.
+ */
+export function normTemplateState(ts = {}) {
+  const canvas = { width: num(ts.canvas?.width, 200, 2160, 1080), height: num(ts.canvas?.height, 200, 3840, 1920) };
+  const h = ts.header || {};
+  const header = {
+    enabled: h.enabled !== false,
+    backgroundColor: hex(h.backgroundColor, '#FFFFFF'),
+    topGap: num(h.topGap, -4000, 4000, 0), // UI-only bookkeeping value; never read by any filter/ASS builder below
+    height: num(h.height, 0, canvas.height, 410),
+    profileX: num(h.profileX, -4000, 4000, 50),
+    profileY: num(h.profileY, -4000, 4000, 95),
+    profileSize: num(h.profileSize, 0, 2000, 86),
+    profilePath: safeProfile(h.profilePath),
+    nameText: String(h.nameText || '').slice(0, 80),
+    nameX: num(h.nameX, -4000, 4000, 155),
+    nameY: num(h.nameY, -4000, 4000, 105),
+    nameFontSize: num(h.nameFontSize, 4, 300, 38),
+    nameColor: hex(h.nameColor, '#080808'),
+    handleText: String(h.handleText || '').slice(0, 80),
+    handleX: num(h.handleX, -4000, 4000, 155),
+    handleY: num(h.handleY, -4000, 4000, 160),
+    handleFontSize: num(h.handleFontSize, 4, 300, 27),
+    handleColor: hex(h.handleColor, '#606060'),
+  };
+  const t = ts.title || {};
+  const titleText = String(t.text || '');
+  const title = {
+    text: titleText,
+    x: num(t.x, -4000, 4000, 70),
+    y: num(t.y, -4000, 4000, 210),
+    width: num(t.width, 1, 8000, 940),
+    fontKey: fontKey(t.fontKey),
+    fontSize: num(t.fontSize, 4, 400, 72),
+    align: ['left', 'center', 'right'].includes(t.align) ? t.align : 'left',
+    color: hex(t.color, '#080808'),
+    strokeWidth: num(t.strokeWidth, 0, 60, 0),
+    strokeColor: hex(t.strokeColor, '#000000'),
+    shadowSize: num(t.shadowSize, 0, 60, 0),
+    shadowColor: hex(t.shadowColor, '#000000'),
+    runs: normalizeRuns(t.runs, titleText.length),
+  };
+  const v = ts.video || {};
+  const video = { x: num(v.x, -8000, 8000, 0), y: num(v.y, -8000, 8000, 410), width: num(v.width, 2, 8000, canvas.width), height: num(v.height, 2, 8000, canvas.height - 410 - 220) };
+  const b = ts.bottomSpace || {};
+  const bottomSpace = { x: num(b.x, -8000, 8000, 0), y: num(b.y, -8000, 8000, canvas.height - 220), width: num(b.width, 0, 8000, canvas.width), height: num(b.height, 0, canvas.height, 220), backgroundColor: hex(b.backgroundColor, header.backgroundColor) };
+  const c = ts.caption || {};
+  const caption = {
+    x: num(c.x, -4000, 4000, 70),
+    y: num(c.y, -4000, 4000, 1650),
+    width: num(c.width, 1, 8000, 940),
+    fontKey: fontKey(c.fontKey),
+    fontSize: num(c.fontSize, 4, 300, 54),
+    align: ['left', 'center', 'right'].includes(c.align) ? c.align : 'center',
+    fontColor: hex(c.fontColor, '#FFFFFF'),
+    outlineColor: hex(c.outlineColor, '#000000'),
+    outlineWidth: num(c.outlineWidth, 0, 60, 5),
+    shadowColor: hex(c.shadowColor, '#000000'),
+    shadowSize: num(c.shadowSize, 0, 60, 4),
+  };
+  return { canvas, header, title, video, bottomSpace, caption };
+}
+
+function titleAssText(title, base, runs) {
+  const src = String(title || '').replace(/\r/g, '');
+  if (!runs.length) return assEsc(src).replaceAll('\n', '\\N');
+  const points = new Set([0, src.length]);
+  for (const r of runs) { points.add(Math.max(0, Math.min(src.length, r.start))); points.add(Math.max(0, Math.min(src.length, r.end))); }
+  const p = [...points].sort((a, b) => a - b);
+  let out = '';
+  for (let i = 0; i < p.length - 1; i++) { const a = p[i], b = p[i + 1]; if (b <= a) continue; const color = [...runs].reverse().find(r => a >= r.start && a < r.end)?.color || base; out += `{\\c${assColor(color, base)}}${assEsc(src.slice(a, b))}`; }
+  return out.replaceAll('\n', '\\N');
+}
+// Anchor point for \pos, derived directly from title.x/width/align — no
+// separate "70/540/1010" constants; an7/8/9 = ASS top-left/top-center/top-right.
+function titleAnchor(title) {
+  const an = title.align === 'right' ? 9 : title.align === 'center' ? 8 : 7;
+  const x = title.align === 'right' ? title.x + title.width : title.align === 'center' ? title.x + title.width / 2 : title.x;
+  return { an, x };
+}
+function subs(file) { return `subtitles='${file.replaceAll("'", "'\\''")}'`; }
+
+async function createAss(dir, ts) {
+  const file = path.join(dir, 'overlay.ass');
+  const f = TITLE_FONTS[ts.title.fontKey];
+  const { an, x } = titleAnchor(ts.title);
+  const text = titleAssText(ts.title.text, ts.title.color, ts.title.runs);
+  const outline = assColor(ts.title.strokeColor, '#000000'), shadow = assColor(ts.title.shadowColor, '#000000');
+  const social = ts.header.enabled
+    ? `Dialogue: 0,0:00:00.00,9:59:59.00,Channel,,0,0,0,,{\\an7\\pos(${ts.header.nameX},${ts.header.nameY})}${assEsc(ts.header.nameText)}\nDialogue: 0,0:00:00.00,9:59:59.00,Handle,,0,0,0,,{\\an7\\pos(${ts.header.handleX},${ts.header.handleY})}${assEsc(ts.header.handleText)}\n`
+    : '';
+  const ass = `[Script Info]
+ScriptType: v4.00+
+PlayResX: ${ts.canvas.width}
+PlayResY: ${ts.canvas.height}
+WrapStyle: 2
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
+Style: Title,${f.name},${ts.title.fontSize},${assColor(ts.title.color, '#080808')},${assColor(ts.title.color, '#080808')},${outline},${shadow},${f.bold},0,0,0,${f.scaleX},100,${f.spacing},0,1,${ts.title.strokeWidth},${ts.title.shadowSize},${an},0,0,0,1
+Style: Channel,${f.name},${ts.header.nameFontSize},${assColor(ts.header.nameColor, '#080808')},${assColor(ts.header.nameColor, '#080808')},&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+Style: Handle,${f.name},${ts.header.handleFontSize},${assColor(ts.header.handleColor, '#606060')},${assColor(ts.header.handleColor, '#606060')},&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+
+[Events]
+Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
+${social}Dialogue: 0,0:00:00.00,9:59:59.00,Title,,0,0,0,,{\\an${an}\\pos(${x},${ts.title.y})}${text}
+`;
+  await writeFile(file, ass, 'utf8');
+  return file;
+}
+
+function captionXExpr(c) { return c.align === 'left' ? String(c.x) : c.align === 'right' ? `${c.x + c.width}-text_w` : `${c.x}+(${c.width}-text_w)/2`; }
+function captionPlan(caps, d) {
+  const src = Array.isArray(caps) ? caps : [], fallback = d / Math.max(src.length, 1);
+  return src.map((x, i) => { if (x && typeof x === 'object') { const text = String(x.text || '').trim(), start = num(x.start, 0, d, i * fallback), end = num(x.end, 0, d, Math.min(d, (i + 1) * fallback)); return { text, start, end }; } const text = String(x || '').trim(); return { text, start: i * fallback, end: Math.min(d, (i + 1) * fallback) }; }).filter(x => x.text && x.end > x.start);
+}
+
+// Circular-alpha-masked avatar overlay — matches the frontend's
+// `border-radius:50%` preview exactly (a real alpha circle, not a square crop).
+async function addProfile(input, output, header, isImage = false) {
+  if (!header.profilePath) return false;
+  try {
+    const size = Math.max(2, Math.round(header.profileSize));
+    const cx = size / 2, cy = size / 2, r2 = (size / 2) * (size / 2);
+    const filter = `[1:v]scale=${size}:${size}:force_original_aspect_ratio=increase,crop=${size}:${size},format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(lte((X-${cx})*(X-${cx})+(Y-${cy})*(Y-${cy}),${r2}),255,0)'[avatar];[0:v][avatar]overlay=${Math.round(header.profileX)}:${Math.round(header.profileY)}:format=auto[out]`;
+    const args = ['-y', '-i', input, '-i', header.profilePath, '-filter_complex', filter, '-map', '[out]'];
+    if (isImage) args.push('-frames:v', '1', '-q:v', '2');
+    else args.push('-map', '0:a?', '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-pix_fmt', 'yuv420p', '-c:a', 'copy', '-movflags', '+faststart');
+    args.push(output);
+    await run('ffmpeg', args);
+    return true;
+  } catch (e) { console.warn('[PROFILE]', e.message); return false; }
+}
+
+// Builds the canvas-background + bottomSpace-rect + video-overlay + title/header
+// subtitle stages. Every coordinate here is read straight off `ts` — nothing
+// is recomputed from a different field, so an arbitrary video.{x,y,width,height}
+// (independent of header.height/bottomSpace.height) lands exactly where sent.
+function baseStages(ts, ass, durationForColor) {
+  const bgColor = ffColor(ts.header.backgroundColor, '#FFFFFF'), bsColor = ffColor(ts.bottomSpace.backgroundColor, '#FFFFFF');
+  return [
+    `color=c=${bgColor}:s=${ts.canvas.width}x${ts.canvas.height}:d=${durationForColor}[canvas]`,
+    `[canvas]drawbox=x=${ts.bottomSpace.x}:y=${ts.bottomSpace.y}:w=${ts.bottomSpace.width}:h=${ts.bottomSpace.height}:color=${bsColor}:t=fill[canvasbs]`,
+    `[0:v]scale=${ts.video.width}:${ts.video.height}:force_original_aspect_ratio=increase,crop=${ts.video.width}:${ts.video.height}[vidscaled]`,
+    `[canvasbs][vidscaled]overlay=${ts.video.x}:${ts.video.y}:shortest=1[withvideo]`,
+    `[withvideo]${subs(ass)}[withtitle]`,
+  ];
+}
+
+// Exported for white-box verification only (see audit test harness) — not used
+// by any other route/module. Safe to keep exported; changes nothing at runtime.
+export { titleAnchor, captionXExpr, baseStages, createAss };
+
+export async function renderThumbnail({ clip, templateState = {}, timestamp = 1 }) {
+  if (!clip?.downloadUrl) throw new Error('clip is required');
+  const ts = normTemplateState(templateState);
+  await mkdir(ROOT, { recursive: true }); await mkdir(OUTPUT_DIR, { recursive: true });
+  const id = crypto.randomUUID(), dir = path.join(ROOT, `thumb-${id}`);
+  await mkdir(dir, { recursive: true });
+  const input = path.join(dir, 'in.mp4');
+  await download(clip.downloadUrl, input);
+  const ass = await createAss(dir, ts);
+  const stages = baseStages(ts, ass, 1);
+  const base = path.join(dir, 'base.jpg'), out = path.join(OUTPUT_DIR, `${id}.jpg`);
+  await run('ffmpeg', ['-y', '-ss', String(Math.max(0, +timestamp || 0)), '-i', input, '-frames:v', '1', '-filter_complex', stages.join(';'), '-map', '[withtitle]', '-q:v', '2', base]);
+  const withProfile = path.join(dir, 'withprofile.jpg');
+  const has = ts.header.enabled && await addProfile(base, withProfile, ts.header, true);
+  if (has) await run('ffmpeg', ['-y', '-i', withProfile, '-frames:v', '1', '-q:v', '2', out]);
+  else await run('ffmpeg', ['-y', '-i', base, '-frames:v', '1', '-q:v', '2', out]);
+  return { id, filename: `${id}.jpg`, url: `/renders/${id}.jpg`, width: ts.canvas.width, height: ts.canvas.height, templateState: ts };
+}
+
+export async function renderShort({ clips, templateState = {}, captions = [], music = null }) {
+  if (!Array.isArray(clips) || !clips.length) throw new Error('At least one clip is required');
+  const ts = normTemplateState(templateState);
+  await mkdir(ROOT, { recursive: true }); await mkdir(OUTPUT_DIR, { recursive: true });
+  const id = crypto.randomUUID(), dir = path.join(ROOT, id);
+  await mkdir(dir, { recursive: true });
+  const selected = clips.slice(0, 6), durations = selected.map(clipDuration), source = durations.reduce((a, b) => a + b, 0);
+  let target = source, musicFile = null, musicStart = 0, musicVolume = 0.9;
+  if (music?.url) { musicFile = localMusicPath(music.url); musicStart = Math.max(0, +music.start || 0); musicVolume = num(music.volume, 0, 2, 0.9); if (+music.duration > 0) target = Math.min(source, +music.duration); }
+  const { video } = ts, norms = [];
+  let remain = target;
+  for (let i = 0; i < selected.length && remain > 0; i++) {
+    const use = Math.min(durations[i], remain), input = path.join(dir, `input-${i}.mp4`), out = path.join(dir, `clip-${i}.mp4`);
+    await download(selected[i].downloadUrl, input);
+    await run('ffmpeg', ['-y', '-threads', THREADS, '-i', input, '-t', String(use), '-an', '-vf', `scale=${video.width}:${video.height}:force_original_aspect_ratio=increase,crop=${video.width}:${video.height},fps=30,format=yuv420p`, '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '24', '-pix_fmt', 'yuv420p', out]);
+    norms.push(out); remain -= use;
+  }
+  const list = path.join(dir, 'concat.txt');
+  await writeFile(list, norms.map(p => `file '${p.replaceAll("'", "'\\''")}'`).join('\n'));
+  const joined = path.join(dir, 'joined.mp4');
+  await run('ffmpeg', ['-y', '-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', joined]);
+
+  const ass = await createAss(dir, ts);
+  const stages = baseStages(ts, ass, target.toFixed(3));
+  const fontFile = CAPTION_FONT_FILES[ts.caption.fontKey] || CAPTION_FONT_FILES.heavy;
+  const shadow = Math.max(0, ts.caption.shadowSize);
+  let lastLabel = 'withtitle';
+  captionPlan(captions, target).forEach((c, i) => {
+    const label = `cap${i}`;
+    stages.push(`[${lastLabel}]drawtext=fontfile='${fontFile}':text='${escDrawtext(c.text)}':fontcolor=${ffColor(ts.caption.fontColor, '#FFFFFF')}:fontsize=${ts.caption.fontSize}:borderw=${ts.caption.outlineWidth}:bordercolor=${ffColor(ts.caption.outlineColor, '#000000')}:shadowcolor=${ffColor(ts.caption.shadowColor, '#000000')}:shadowx=${shadow}:shadowy=${shadow}:x=${captionXExpr(ts.caption)}:y=${ts.caption.y}:enable='between(t,${c.start.toFixed(2)},${c.end.toFixed(2)})'[${label}]`);
+    lastLabel = label;
+  });
+  const composed = path.join(dir, 'composed.mp4');
+  await run('ffmpeg', ['-y', '-threads', THREADS, '-i', joined, '-t', String(target), '-filter_complex', stages.join(';'), '-map', `[${lastLabel}]`, '-an', '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', composed]);
+
+  const withProfile = path.join(dir, 'withprofile.mp4'), out = path.join(OUTPUT_DIR, `${id}.mp4`);
+  const has = ts.header.enabled && await addProfile(composed, withProfile, ts.header, false);
+  const finalVideo = has ? withProfile : composed;
+  if (musicFile) await run('ffmpeg', ['-y', '-i', finalVideo, '-ss', String(musicStart), '-t', String(target), '-i', musicFile, '-filter:a', `volume=${musicVolume}`, '-map', '0:v:0', '-map', '1:a:0', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-shortest', '-movflags', '+faststart', out]);
+  else await run('ffmpeg', ['-y', '-i', finalVideo, '-c', 'copy', out]);
+  return { id, filename: `${id}.mp4`, url: `/renders/${id}.mp4`, duration: +target.toFixed(2), sourceDuration: +source.toFixed(2), templateState: ts };
+}
