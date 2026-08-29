@@ -1,7 +1,17 @@
 FROM node:22-bookworm-slim
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ffmpeg fonts-noto-cjk ca-certificates \
+ && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    fonts-noto-cjk \
+    fonts-mplus \
+    fonts-vlgothic \
+    fonts-ipafont-gothic \
+    fonts-ipafont-mincho \
+    fonts-morisawa-bizud-gothic \
+    fonts-morisawa-bizud-mincho \
+    ca-certificates \
+ && fc-cache -f -v >/dev/null 2>&1 || true \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
