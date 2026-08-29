@@ -40,19 +40,21 @@ function parseJson(text){
 export async function analyzeVideoForMemes({publicDir,uploadId,downloadUrl,duration}){
   const key=await getSetting('OPENAI_API_KEY');if(!key)throw new Error('관리자 API 설정에서 OpenAI API Key를 먼저 입력하세요');
   const videoPath=safeUploadPath(publicDir,{uploadId,downloadUrl}),frames=await frameDataUrls(videoPath,duration);
-  const prompt=`You are a short-form viral copy editor for Japanese and English-speaking Gen Z audiences. Analyze the four chronological frames from ONE short video. Infer only what is visually supported. Do not invent identities, facts, locations, relationships, or events you cannot see. Create punchy internet-native copy, not literal translation. Japanese may naturally use expressions such as え、待って, エグい, やば, 草, www, 無理, 天才かよ when appropriate. English may naturally use BRO, NAH, WAIT, AIN'T NO WAY, bro is cooking, I'm crying, 💀, 😭 when appropriate. Avoid forcing slang when the clip is beautiful, calm, emotional, or serious.
+  const prompt=`You are a short-form viral copy editor for Japanese, English-speaking, Arabic-speaking, and Spanish-speaking Gen Z audiences. Analyze the four chronological frames from ONE short video. Infer only what is visually supported. Do not invent identities, facts, locations, relationships, or events you cannot see. Create punchy internet-native copy, not literal translations. Japanese may naturally use expressions such as え、待って, エグい, やば, 草, www, 無理, 天才かよ when appropriate. English may naturally use BRO, NAH, WAIT, AIN'T NO WAY, bro is cooking, I'm crying, 💀, 😭 when appropriate. Arabic should be natural Modern Standard Arabic with social-media energy and may use light colloquial phrasing that is broadly understandable. Spanish should be neutral international Spanish suitable for Spain and Latin America, with natural short-form internet phrasing. Avoid forcing slang when the clip is beautiful, calm, emotional, or serious.
 
 Return ONLY valid JSON in this exact shape:
 {
  "sceneSummary":"short Korean summary of what visibly happens",
  "viralAngle":"short Korean explanation of the strongest hook",
  "reactionType":"funny|surprise|cute|beautiful|emotional|fail|twist|skill|weird|other",
- "ja":{"titles":["title 1 with optional line break as \\n","title 2","title 3"],"captions":[{"text":"...","start":0.0,"end":2.2},{"text":"...","start":2.2,"end":4.8}]},
- "en":{"titles":["title 1 with optional line break as \\n","title 2","title 3"],"captions":[{"text":"...","start":0.0,"end":2.2},{"text":"...","start":2.2,"end":4.8}]}
+ "ja":{"titles":["title 1 with optional line break as \\n","title 2","title 3"],"captions":[{"text":"...","start":0.0,"end":2.2}]},
+ "en":{"titles":["title 1 with optional line break as \\n","title 2","title 3"],"captions":[{"text":"...","start":0.0,"end":2.2}]},
+ "ar":{"titles":["title 1 with optional line break as \\n","title 2","title 3"],"captions":[{"text":"...","start":0.0,"end":2.2}]},
+ "es":{"titles":["title 1 with optional line break as \\n","title 2","title 3"],"captions":[{"text":"...","start":0.0,"end":2.2}]}
 }
-Rules: 2-5 caption beats per language; times must be ascending, non-overlapping, and within ${Math.max(1,Number(duration)||12).toFixed(1)} seconds. Titles should be thumbnail-safe: usually 2 short lines, each line concise. Japanese and English should feel natively written and can differ substantially.`;
+Rules: 2-5 caption beats per language; times must be ascending, non-overlapping, and within ${Math.max(1,Number(duration)||12).toFixed(1)} seconds. Titles should be thumbnail-safe: usually 2 short lines, each line concise. Each language should feel natively written and may differ substantially.`;
   const content=[{type:'input_text',text:prompt},...frames.map(image_url=>({type:'input_image',image_url}))];
-  const r=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{'content-type':'application/json','authorization':`Bearer ${key}`},body:JSON.stringify({model:process.env.M3_VISION_MODEL||'gpt-5.6-luna',input:[{role:'user',content}],max_output_tokens:1800})});
+  const r=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{'content-type':'application/json','authorization':`Bearer ${key}`},body:JSON.stringify({model:process.env.M3_VISION_MODEL||'gpt-5.6-luna',input:[{role:'user',content}],max_output_tokens:2600})});
   const j=await r.json();if(!r.ok)throw new Error(j?.error?.message||`OpenAI ${r.status}`);
   const parsed=parseJson(extractText(j));
   return {...parsed,model:process.env.M3_VISION_MODEL||'gpt-5.6-luna'};
