@@ -1,10 +1,17 @@
 (()=>{
   const $=id=>document.getElementById(id);
   let clip=null,analysis=null,localUrl='';
+  const langs=['ja','en','ar','es'];
+  function currentLang(){const v=$('target')?.value;return langs.includes(v)?v:'ja'}
   function wait(){
     const input=$('directVideoFile'),an=$('analyzeVideoBtn');
     if(!input||!an)return setTimeout(wait,150);
-    bind(input,an);
+    addLanguageButtons();bind(input,an);
+  }
+  function addLanguageButtons(){
+    const en=$('applyEnBtn');if(!en)return;
+    if(!$('applyArBtn')){const b=document.createElement('button');b.id='applyArBtn';b.className='secondary';b.type='button';b.textContent='🇸🇦 아랍 적용';en.insertAdjacentElement('afterend',b)}
+    if(!$('applyEsBtn')){const b=document.createElement('button');b.id='applyEsBtn';b.className='secondary';b.type='button';b.textContent='🇪🇸 스페인어 적용';$('applyArBtn').insertAdjacentElement('afterend',b)}
   }
   function status(t){const n=$('directVideoStatus');if(n)n.textContent=t}
   function astatus(t){const n=$('analysisStatus');if(n)n.textContent=t}
@@ -31,24 +38,28 @@
       const r=await fetch('/api/video/analyze',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({uploadId:clip.uploadId,downloadUrl:clip.downloadUrl,duration:clip.duration})});
       const j=await r.json();if(!r.ok)throw new Error(j.error||`HTTP ${r.status}`);
       analysis=j;astatus(`${j.sceneSummary||''}${j.viralAngle?' · '+j.viralAngle:''}`);
-      apply($('target')?.value==='en'?'en':'ja');
+      apply(currentLang());
     }catch(e){astatus('분석 실패 · '+e.message)}
   }
   function rows(){return [...document.querySelectorAll('#captionList .capRow')]}
   function apply(lang){
     const p=analysis?.[lang];if(!p)return;
+    const target=$('target');if(target&&langs.includes(lang)){target.value=lang;target.dispatchEvent(new Event('change',{bubbles:true}))}
     const t=$('veTitleText');if(t){t.value=p.titles?.[0]||'';t.dispatchEvent(new Event('input',{bubbles:true}))}
     const caps=Array.isArray(p.captions)?p.captions:[];let rs=rows();
     while(rs.length<caps.length&&$('addCaptionRow')){$('addCaptionRow').click();rs=rows()}
     while(rs.length>caps.length&&rs.length){const d=rs.at(-1)?.querySelector('[data-x]');if(!d)break;d.click();rs=rows()}
     rs=rows();caps.forEach((c,i)=>{const r=rs[i];if(!r)return;const tx=r.querySelector('[data-t]'),s=r.querySelector('[data-s]'),e=r.querySelector('[data-e]');if(tx){tx.value=String(c.text||'');tx.dispatchEvent(new Event('input',{bubbles:true}))}if(s){s.value=Number(c.start||0).toFixed(1);s.dispatchEvent(new Event('input',{bubbles:true}))}if(e){e.value=Number(c.end||0).toFixed(1);e.dispatchEvent(new Event('input',{bubbles:true}))}});
     $('previewVideo')?.dispatchEvent(new Event('timeupdate'));
+    const rtl=lang==='ar';if($('previewTitle'))$('previewTitle').dir=rtl?'rtl':'ltr';if($('previewCaption'))$('previewCaption').dir=rtl?'rtl':'ltr';
   }
   function bind(input,an){
     input.addEventListener('change',e=>{e.stopImmediatePropagation();doUpload(e.target.files?.[0])},true);
     an.addEventListener('click',e=>{e.preventDefault();e.stopImmediatePropagation();doAnalyze()},true);
     $('applyJaBtn')?.addEventListener('click',e=>{e.preventDefault();e.stopImmediatePropagation();apply('ja')},true);
     $('applyEnBtn')?.addEventListener('click',e=>{e.preventDefault();e.stopImmediatePropagation();apply('en')},true);
+    $('applyArBtn')?.addEventListener('click',e=>{e.preventDefault();e.stopImmediatePropagation();apply('ar')},true);
+    $('applyEsBtn')?.addEventListener('click',e=>{e.preventDefault();e.stopImmediatePropagation();apply('es')},true);
     const original=window.fetch.bind(window);
     window.fetch=async(inputArg,init)=>{try{const u=typeof inputArg==='string'?inputArg:String(inputArg?.url||'');if(clip&&(u.includes('/api/render')||u.includes('/api/thumbnail'))&&init?.body){const d=JSON.parse(init.body);if(u.includes('/api/render'))d.clips=[clip];else d.clip=clip;init={...init,body:JSON.stringify(d)}}}catch{}return original(inputArg,init)};
     if(input.files?.[0])doUpload(input.files[0]);
