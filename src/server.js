@@ -25,7 +25,7 @@ app.get('/api/download',async(q,r)=>sendRenderDownload(q,r,q.query.file));
 app.get('/',async(_q,r)=>{try{r.type('html').send(editorHtml(await readFile(path.join(publicDir,'index.html'),'utf8')))}catch(e){r.status(500).send(e.message)}});
 app.use(express.static(publicDir));
 app.get('/api/health',async(_q,r)=>{const s=await getSettingsStatus();r.json({ok:true,service:'m3-global-shorts',pexels:s.PEXELS_API_KEY.configured,pixabay:s.PIXABAY_API_KEY.configured,openai:s.OPENAI_API_KEY.configured})});
-app.get('/api/targets',(_q,r)=>r.json({targets:listTargetProfiles()});
+app.get('/api/targets',(_q,r)=>r.json({targets:listTargetProfiles()}));
 app.get('/api/admin/settings',async(_q,r)=>{try{r.json(await getSettingsStatus())}catch(e){r.status(500).json({error:e.message})}});
 app.post('/api/admin/settings',async(q,r)=>{try{const a={};for(const k of['PEXELS_API_KEY','PIXABAY_API_KEY','OPENAI_API_KEY'])if(Object.prototype.hasOwnProperty.call(q.body||{},k))a[k]=q.body[k];r.json({ok:true,settings:await saveSettings(a)})}catch(e){r.status(500).json({error:e.message})}});
 app.post('/api/video/analyze',async(q,r)=>{try{const{uploadId,downloadUrl,duration}=q.body||{};if(!uploadId&&!downloadUrl)return r.status(400).json({error:'업로드 영상을 먼저 선택하세요'});r.json(await analyzeVideoForMemes({publicDir,uploadId,downloadUrl,duration}))}catch(e){console.error('[VIDEO ANALYZE]',e);r.status(500).json({error:e.message})}});
