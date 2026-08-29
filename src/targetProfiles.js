@@ -37,6 +37,19 @@ export const TARGET_PROFILES = {
       romantic:['منظر أريد مشاركته مع شخص عزيز','بعض الليالي لا تحتاج إلى كلمات','يمكنني المشي هنا طوال الليل'],
       energetic:['طاقة هذه المدينة لا تتوقف','ليلة أخرى قبل العودة','هذا النوع من اللحظات لا يُنسى']
     }
+  },
+  es: {
+    id: 'es', label: '🇪🇸 스페인어권', language: 'es', direction: 'ltr',
+    fontFamily: 'Noto Sans', musicMarket: 'LATAM',
+    titlePatterns: ['{subject} se ve brutal','Un lugar que tienes que ver al menos una vez','Podría mirar {subject} para siempre','Esto me dio ganas de dejarlo todo y viajar'],
+    moodLines: {
+      dreamy:['Podría quedarme aquí para siempre','Hay paisajes que parecen irreales','Que el mundo se detenga un momento'],
+      nostalgic:['Hay lugares que se sienten como recuerdos','Esto me llevó atrás por un segundo','Un paisaje extrañamente familiar'],
+      freedom:['Solo quiero irme lejos','Sin planes, solo viajar','Así se siente la libertad'],
+      calm:['No hace falta hacer nada, solo mirar','Los lugares tranquilos curan distinto','Quizá solo necesitamos bajar el ritmo'],
+      romantic:['Un lugar para compartir con alguien especial','Hay noches que no necesitan palabras','Caminaría aquí toda la noche'],
+      energetic:['Esta ciudad no te deja parar','Una noche más antes de volver','Esta energía pega diferente']
+    }
   }
 };
 
