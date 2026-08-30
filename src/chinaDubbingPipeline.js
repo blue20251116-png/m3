@@ -8,6 +8,7 @@ const WORK_ROOT = process.env.WORK_DIR || '/tmp/m3-shorts';
 const DEFAULT_TRANSCRIBE_MODEL = process.env.M3_DIARIZE_MODEL || 'gpt-4o-transcribe-diarize';
 const DEFAULT_SCRIPT_MODEL = process.env.M3_SCRIPT_MODEL || 'gpt-5.6-luna';
 const DEFAULT_TTS_MODEL = process.env.M3_TTS_MODEL || 'gpt-4o-mini-tts';
+const BASE_TTS_SPEED = 1.3;
 const VOICES = ['marin','cedar','coral','ash','nova','echo','sage','shimmer','verse','alloy','onyx','fable','ballad'];
 
 function run(cmd, args, { cwd } = {}) {
@@ -52,7 +53,7 @@ function normalizeTranscript(j) {
 function humorRules(level){if(level==='original')return'원문 의미를 90% 이상 보존하고 번역투만 자연스럽게 없앤다. 억지 개그를 추가하지 않는다.';if(level==='max')return'영상에서 실제로 일어나는 사건과 대화 관계는 반드시 유지하되, 한국 쇼츠에서 자연스럽게 들리는 황당한 리액션과 펀치라인을 적극적으로 넣는다. 원문 핵심 의미는 약 50~60% 보존한다.';return'원문 사건과 핵심 대화는 약 70% 보존하고, 한국식 예능 리액션과 병맛 펀치라인을 30% 정도 추가한다. 억지 밈 남발은 금지한다.';}
 async function rewriteKorean({ transcript, humorLevel='variety', key }) {
   const compact=transcript.segments.map(s=>({id:s.id,speaker:s.speaker,start:s.start,end:s.end,original:s.original}));
-  const prompt=`너는 한국 유튜브 쇼츠의 중국 병맛 상황극 현지화 작가다. 아래 중국어 화자별 대사를 한국어 더빙 대본으로 재작성한다.\n\n핵심 규칙:\n1. 화면에 없는 사건, 물건, 관계, 신분을 새로 만들지 않는다.\n2. 화자 ID, segment id, start, end를 절대 변경하지 않는다.\n3. 같은 화자는 영상 전체에서 같은 말투 캐릭터를 유지한다.\n4. 앞뒤 대화 문맥을 함께 보고 질문-반박-끼어듦-펀치라인 흐름을 살린다.\n5. 각 korean 문장은 (end-start)초 안에 TTS가 들어갈 정도로 짧게 쓴다. 1초당 한국어 약 4~6음절을 기준으로 너무 길면 과감히 압축한다.\n6. 직역투, 설명조, 과도한 유행어 반복을 피한다. 'ㅋㅋ'는 필요한 장면에만 사용한다.\n7. 욕설/혐오 표현 없이도 웃기게 만든다.\n8. ${humorRules(humorLevel)}\n\n반환은 JSON만. 정확한 형식:\n{"sceneSummary":"한국어 한두 문장","viralHook":"가장 웃긴 포인트","speakers":[{"id":"A","character":"짧은 한국어 캐릭터 설명"}],"dialogues":[{"id":"seg_001","speaker":"A","start":0.0,"end":1.5,"original":"원문","korean":"한국어 대사"}]}\n\n입력:\n${JSON.stringify(compact)}`;
+  const prompt=`너는 한국 유튜브 쇼츠의 중국 병맛 상황극 현지화 작가다. 아래 중국어 화자별 대사를 한국어 더빙 대본으로 재작성한다.\n\n핵심 규칙:\n1. 화면에 없는 사건, 물건, 관계, 신분을 새로 만들지 않는다.\n2. 화자 ID, segment id, start, end를 절대 변경하지 않는다.\n3. 같은 화자는 영상 전체에서 같은 말투 캐릭터를 유지한다.\n4. 앞뒤 대화 문맥을 함께 보고 질문-반박-끼어듦-펀치라인 흐름을 살린다.\n5. 한국어 TTS는 기본 1.3배속으로 재생한다. 각 korean 문장은 1.3배속 기준에서도 (end-start)초 안에 자연스럽게 들어갈 정도로 짧게 쓴다. 너무 길면 의미를 유지하며 압축한다.\n6. 직역투, 설명조, 과도한 유행어 반복을 피한다. 'ㅋㅋ'는 필요한 장면에만 사용한다.\n7. 욕설/혐오 표현 없이도 웃기게 만든다.\n8. ${humorRules(humorLevel)}\n\n반환은 JSON만. 정확한 형식:\n{"sceneSummary":"한국어 한두 문장","viralHook":"가장 웃긴 포인트","speakers":[{"id":"A","character":"짧은 한국어 캐릭터 설명"}],"dialogues":[{"id":"seg_001","speaker":"A","start":0.0,"end":1.5,"original":"원문","korean":"한국어 대사"}]}\n\n입력:\n${JSON.stringify(compact)}`;
   const r=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${key}`},body:JSON.stringify({model:DEFAULT_SCRIPT_MODEL,input:prompt,max_output_tokens:5000})}); const j=await r.json(); if(!r.ok) throw new Error(j?.error?.message||`OpenAI script ${r.status}`);
   const parsed=parseJson(extractText(j)), byId=new Map(transcript.segments.map(s=>[s.id,s])), dialogues=[];
   for(const d of parsed.dialogues||[]){const src=byId.get(String(d.id));if(src)dialogues.push({id:src.id,speaker:src.speaker,start:src.start,end:src.end,original:src.original,korean:String(d.korean||'').trim()||src.original});}
@@ -61,7 +62,7 @@ async function rewriteKorean({ transcript, humorLevel='variety', key }) {
 }
 export async function analyzeChinaDubbing({ publicDir, uploadId, humorLevel='variety' }) {
   const key=await requireOpenAIKey(), work=path.join(WORK_ROOT,`dub-analyze-${crypto.randomUUID()}`); await mkdir(work,{recursive:true});
-  try{const videoPath=safeUploadPath(publicDir,uploadId),audioPath=path.join(work,'audio.wav');await extractAudio(videoPath,audioPath);const raw=await transcribeDiarized(audioPath,key),transcript=normalizeTranscript(raw),localized=await rewriteKorean({transcript,humorLevel,key});return{ok:true,mode:'china-meme-dubbing',humorLevel,duration:transcript.duration,sourceText:transcript.text,sceneSummary:localized.sceneSummary,viralHook:localized.viralHook,speakers:localized.speakers,dialogues:localized.dialogues,models:{transcription:DEFAULT_TRANSCRIBE_MODEL,script:DEFAULT_SCRIPT_MODEL,tts:DEFAULT_TTS_MODEL},availableVoices:VOICES};}finally{await rm(work,{recursive:true,force:true}).catch(()=>{});}
+  try{const videoPath=safeUploadPath(publicDir,uploadId),audioPath=path.join(work,'audio.wav');await extractAudio(videoPath,audioPath);const raw=await transcribeDiarized(audioPath,key),transcript=normalizeTranscript(raw),localized=await rewriteKorean({transcript,humorLevel,key});return{ok:true,mode:'china-meme-dubbing',humorLevel,duration:transcript.duration,sourceText:transcript.text,sceneSummary:localized.sceneSummary,viralHook:localized.viralHook,speakers:localized.speakers,dialogues:localized.dialogues,models:{transcription:DEFAULT_TRANSCRIBE_MODEL,script:DEFAULT_SCRIPT_MODEL,tts:DEFAULT_TTS_MODEL},baseTtsSpeed:BASE_TTS_SPEED,availableVoices:VOICES};}finally{await rm(work,{recursive:true,force:true}).catch(()=>{});}
 }
 function assTime(sec){const n=Math.max(0,Number(sec)||0),h=Math.floor(n/3600),m=Math.floor((n%3600)/60),s=n%60;return`${h}:${String(m).padStart(2,'0')}:${s.toFixed(2).padStart(5,'0')}`;}
 function assEsc(s){return String(s||'').replace(/\\/g,'\\\\').replace(/\{/g,'\\{').replace(/\}/g,'\\}').replace(/\r?\n/g,'\\N');}
@@ -74,11 +75,16 @@ export async function renderChinaDubbing({ publicDir, renderDir, uploadId, speak
   const work=path.join(WORK_ROOT,`dub-render-${crypto.randomUUID()}`);await mkdir(work,{recursive:true});await mkdir(renderDir,{recursive:true});
   try{
     const voiceBySpeaker=new Map((speakers||[]).map((s,i)=>[String(s.id),VOICES.includes(String(s.voice))?String(s.voice):VOICES[i%VOICES.length]])),audioFiles=[],sync=[];
-    for(let i=0;i<validDialogues.length;i++){const d=validDialogues[i],f=path.join(work,`tts-${String(i).padStart(3,'0')}.wav`);await synthesizeSegment({key,text:String(d.korean),voice:voiceBySpeaker.get(String(d.speaker))||VOICES[i%VOICES.length],outPath:f});const rawDuration=await audioDuration(f),slot=Math.max(0.05,Number(d.end)-Number(d.start)),rate=rawDuration>slot?rawDuration/slot:1;audioFiles.push(f);sync.push({id:d.id,slot,rawDuration,rate});}
+    for(let i=0;i<validDialogues.length;i++){
+      const d=validDialogues[i],f=path.join(work,`tts-${String(i).padStart(3,'0')}.wav`);
+      await synthesizeSegment({key,text:String(d.korean),voice:voiceBySpeaker.get(String(d.speaker))||VOICES[i%VOICES.length],outPath:f});
+      const rawDuration=await audioDuration(f),slot=Math.max(0.05,Number(d.end)-Number(d.start)),fitRate=rawDuration/slot,effectiveRate=Math.max(BASE_TTS_SPEED,fitRate);
+      audioFiles.push(f);sync.push({id:d.id,slot,rawDuration,baseRate:BASE_TTS_SPEED,fitRate,effectiveRate});
+    }
     const assPath=path.join(work,'captions.ass');await writeFile(assPath,buildAss(validDialogues),'utf8');const outName=`china-dub-${crypto.randomUUID()}.mp4`,outPath=path.join(renderDir,outName),args=['-y','-i',videoPath];for(const f of audioFiles)args.push('-i',f);const filters=[],mixLabels=[];
-    validDialogues.forEach((d,i)=>{const delay=Math.max(0,Math.round(Number(d.start)*1000)),label=`t${i}`,slot=Math.max(0.05,Number(d.end)-Number(d.start)),tempo=sync[i].rate>1.0001?`${atempoChain(sync[i].rate)},`:'';filters.push(`[${i+1}:a]${tempo}apad,atrim=0:${slot.toFixed(3)},adelay=${delay}|${delay},volume=1.0[${label}]`);mixLabels.push(`[${label}]`);});
+    validDialogues.forEach((d,i)=>{const delay=Math.max(0,Math.round(Number(d.start)*1000)),label=`t${i}`,slot=Math.max(0.05,Number(d.end)-Number(d.start)),tempo=atempoChain(sync[i].effectiveRate);filters.push(`[${i+1}:a]${tempo},apad,atrim=0:${slot.toFixed(3)},adelay=${delay}|${delay},volume=1.0[${label}]`);mixLabels.push(`[${label}]`);});
     filters.push(`${mixLabels.join('')}amix=inputs=${mixLabels.length}:duration=longest:normalize=0[aout]`);filters.push(`[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,subtitles=${assPath.replace(/([\\':])/g,'\\$1')}[vout]`);args.push('-filter_complex',filters.join(';'),'-map','[vout]','-map','[aout]','-c:v','libx264','-preset','veryfast','-crf','20','-threads','2','-c:a','aac','-b:a','192k','-shortest','-movflags','+faststart',outPath);await run('ffmpeg',args);
-    return{ok:true,filename:outName,duration:Math.max(...validDialogues.map(d=>Number(d.end)||0)),voices:Object.fromEntries(voiceBySpeaker),sourceAudioUsed:false,sync};
+    return{ok:true,filename:outName,duration:Math.max(...validDialogues.map(d=>Number(d.end)||0)),voices:Object.fromEntries(voiceBySpeaker),sourceAudioUsed:false,baseTtsSpeed:BASE_TTS_SPEED,sync};
   }finally{await rm(work,{recursive:true,force:true}).catch(()=>{});}
 }
 export function listDubbingVoices(){return[...VOICES];}
