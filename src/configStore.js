@@ -3,6 +3,14 @@ import path from 'node:path';
 
 const SETTINGS_ROOT = process.env.M3_SETTINGS_DIR || '/app/db';
 const FILE = process.env.M3_SETTINGS_FILE || path.join(SETTINGS_ROOT, 'settings.json');
+const SETTING_KEYS = [
+  'PEXELS_API_KEY',
+  'PIXABAY_API_KEY',
+  'OPENAI_API_KEY',
+  'GOOGLE_CLIENT_ID',
+  'GOOGLE_CLIENT_SECRET',
+  'YOUTUBE_OAUTH_REDIRECT_URI'
+];
 let cache = null;
 
 async function load() {
@@ -18,19 +26,20 @@ export async function getSetting(name) {
 }
 
 export async function getSettingsStatus() {
-  const pexels = await getSetting('PEXELS_API_KEY');
-  const pixabay = await getSetting('PIXABAY_API_KEY');
-  const openai = await getSetting('OPENAI_API_KEY');
-  return {
-    PEXELS_API_KEY: { configured: Boolean(pexels), masked: mask(pexels) },
-    PIXABAY_API_KEY: { configured: Boolean(pixabay), masked: mask(pixabay) },
-    OPENAI_API_KEY: { configured: Boolean(openai), masked: mask(openai) }
-  };
+  const out = {};
+  for (const key of SETTING_KEYS) {
+    const value = await getSetting(key);
+    out[key] = {
+      configured: Boolean(value),
+      masked: key === 'YOUTUBE_OAUTH_REDIRECT_URI' ? value : mask(value)
+    };
+  }
+  return out;
 }
 
 export async function saveSettings(values = {}) {
   const data = await load();
-  for (const key of ['PEXELS_API_KEY', 'PIXABAY_API_KEY', 'OPENAI_API_KEY']) {
+  for (const key of SETTING_KEYS) {
     if (!(key in values)) continue;
     const value = String(values[key] || '').trim();
     if (value) data[key] = value;
