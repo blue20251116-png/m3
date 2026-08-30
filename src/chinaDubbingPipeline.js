@@ -178,7 +178,7 @@ async function synthesizeSegment({ key, text, voice, outPath }) {
   await writeFile(outPath, Buffer.from(await r.arrayBuffer()));
 }
 
-export async function renderChinaDubbing({ publicDir, renderDir, uploadId, speakers = [], dialogues = [], originalVolume = 0.12 }) {
+export async function renderChinaDubbing({ publicDir, renderDir, uploadId, speakers = [], dialogues = [] }) {
   const key = await requireOpenAIKey();
   const videoPath = safeUploadPath(publicDir, uploadId);
   const validDialogues = (dialogues || []).filter(d => String(d.korean || '').trim() && Number(d.end) > Number(d.start)).sort((a,b)=>Number(a.start)-Number(b.start));
@@ -197,17 +197,17 @@ export async function renderChinaDubbing({ publicDir, renderDir, uploadId, speak
     const outName = `china-dub-${crypto.randomUUID()}.mp4`, outPath = path.join(renderDir,outName);
     const args = ['-y','-i',videoPath];
     for (const f of audioFiles) args.push('-i',f);
-    const filters = [`[0:a]volume=${Math.max(0,Math.min(1,Number(originalVolume)||0))}[orig]`];
-    const mixLabels = ['[orig]'];
+    const filters = [];
+    const mixLabels = [];
     validDialogues.forEach((d,i)=>{
       const delay=Math.max(0,Math.round(Number(d.start)*1000)), label=`t${i}`;
       filters.push(`[${i+1}:a]adelay=${delay}|${delay},volume=1.0[${label}]`); mixLabels.push(`[${label}]`);
     });
-    filters.push(`${mixLabels.join('')}amix=inputs=${mixLabels.length}:duration=first:normalize=0[aout]`);
+    filters.push(`${mixLabels.join('')}amix=inputs=${mixLabels.length}:duration=longest:normalize=0[aout]`);
     filters.push(`[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,subtitles=${assPath.replace(/([\\':])/g,'\\$1')}[vout]`);
-    args.push('-filter_complex',filters.join(';'),'-map','[vout]','-map','[aout]','-c:v','libx264','-preset','veryfast','-crf','20','-threads','2','-c:a','aac','-b:a','192k','-movflags','+faststart',outPath);
+    args.push('-filter_complex',filters.join(';'),'-map','[vout]','-map','[aout]','-c:v','libx264','-preset','veryfast','-crf','20','-threads','2','-c:a','aac','-b:a','192k','-shortest','-movflags','+faststart',outPath);
     await run('ffmpeg',args);
-    return { ok:true, filename:outName, duration:Math.max(...validDialogues.map(d=>Number(d.end)||0)), voices:Object.fromEntries(voiceBySpeaker) };
+    return { ok:true, filename:outName, duration:Math.max(...validDialogues.map(d=>Number(d.end)||0)), voices:Object.fromEntries(voiceBySpeaker), sourceAudioUsed:false };
   } finally {
     await rm(work,{recursive:true,force:true}).catch(()=>{});
   }
