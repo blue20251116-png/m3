@@ -62,15 +62,14 @@ $('uploadAnalyze').onclick=async()=>{
   finally{ btn.disabled=false; }
 };
 
-$('originalVolume').oninput=()=>{ $('originalVolumeVal').textContent=`${$('originalVolume').value}%`; };
 $('render').onclick=async()=>{
   if(!uploaded?.uploadId){setStatus('renderStatus','업로드 영상이 없습니다.');return;}
   const btn=$('render'); btn.disabled=true;
   try{
-    setStatus('renderStatus',`화자별 TTS ${state.dialogues.length}개 생성 후 FFmpeg 렌더 중...`);
-    const out=await jsonFetch('/api/dubbing/render',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({uploadId:uploaded.uploadId,speakers:state.speakers,dialogues:state.dialogues,originalVolume:Number($('originalVolume').value)/100})});
+    setStatus('renderStatus',`원본 오디오는 제외하고 화자별 TTS ${state.dialogues.length}개 생성 후 FFmpeg 렌더 중...`);
+    const out=await jsonFetch('/api/dubbing/render',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({uploadId:uploaded.uploadId,speakers:state.speakers,dialogues:state.dialogues})});
     $('result').innerHTML=`<video controls playsinline src="${esc(out.downloadUrl)}"></video><br><a href="${esc(out.downloadUrl)}">완성 MP4 다운로드</a>`;
-    setStatus('renderStatus','완료. 대사나 목소리를 수정한 뒤 다시 렌더할 수도 있습니다.');
+    setStatus('renderStatus','완료. 원본 영상 음성은 포함되지 않고 한국어 TTS만 사용됩니다.');
   }catch(e){ console.error(e); setStatus('renderStatus',`실패: ${e.message}`); }
   finally{ btn.disabled=false; }
 };
